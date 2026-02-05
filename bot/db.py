@@ -2,6 +2,14 @@ import sqlite3
 import time
 from typing import Optional, Dict, List
 
+
+def normalize_city(city: str) -> str:
+    """Нормализация названия города: убираем пробелы, приводим к нижнему регистру"""
+    if not city:
+        return ""
+    return city.strip().lower()
+
+
 class Database:
     def __init__(self, db_path="bot.db"):
         self.db_path = db_path
@@ -52,6 +60,7 @@ class Database:
             """)
 
     def save_user(self, user_id: int, data: Dict):
+        city = normalize_city(data['city'])
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, created_at)
@@ -63,7 +72,7 @@ class Database:
                     (SELECT COALESCE(is_banned, 0) FROM users WHERE user_id = ?),
                     COALESCE((SELECT created_at FROM users WHERE user_id = ?), strftime('%s', 'now'))
                 )
-            """, (user_id, data.get('username'), data['age'], data['gender'], data['city'], data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id))
+            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id))
 
     def get_user(self, user_id: int) -> Optional[Dict]:
         with sqlite3.connect(self.db_path) as conn:
@@ -80,6 +89,7 @@ class Database:
             return dict(row) if row else None
 
     def get_random_profile(self, user_id: int, city: str, preferences: str) -> Optional[Dict]:
+        city = normalize_city(city)
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             gender_filter = None
