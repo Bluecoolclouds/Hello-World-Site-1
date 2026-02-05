@@ -245,30 +245,38 @@ async def process_bio(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("pref_"))
 async def process_preferences(callback: CallbackQuery, state: FSMContext):
-    pref = callback.data.split("_")[1]
-    await state.update_data(preferences=pref)
-    
-    data = await state.get_data()
-    db.save_user(callback.from_user.id, data)
-    await state.clear()
-    
-    user = db.get_user(callback.from_user.id)
-    profile_text = format_profile(user)
-    
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
-    )
-    
-    await callback.message.edit_text("✅ Анкета создана!")
-    
-    await callback.bot.send_photo(
-        chat_id=callback.from_user.id,
-        photo=PHOTO_URL,
-        caption=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
-        reply_markup=kb.as_markup()
-    )
-    await callback.answer("Регистрация завершена!")
+    try:
+        pref = callback.data.split("_")[1]
+        await state.update_data(preferences=pref)
+        
+        data = await state.get_data()
+        db.save_user(callback.from_user.id, data)
+        await state.clear()
+        
+        user = db.get_user(callback.from_user.id)
+        profile_text = format_profile(user)
+        
+        kb = InlineKeyboardBuilder()
+        kb.row(
+            InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
+        )
+        
+        try:
+            await callback.message.edit_text("✅ Анкета создана!")
+        except Exception:
+            pass
+        
+        await callback.bot.send_photo(
+            chat_id=callback.from_user.id,
+            photo=PHOTO_URL,
+            caption=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
+            reply_markup=kb.as_markup()
+        )
+        await callback.answer("Регистрация завершена!")
+    except Exception as e:
+        import logging
+        logging.error(f"Error in process_preferences: {e}")
+        await callback.answer(f"Ошибка: {str(e)[:50]}", show_alert=True)
 
 
 @router.callback_query(F.data == "start_search")
