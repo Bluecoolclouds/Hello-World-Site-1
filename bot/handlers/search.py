@@ -29,14 +29,16 @@ def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
 
 def format_profile_text(profile: dict) -> str:
     from bot.db import format_online_status
+    from bot.handlers.registration import format_looking_for
     gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
     online_status = format_online_status(profile.get('last_active'))
+    looking_for_text = format_looking_for(profile.get('looking_for', ''))
     return (
         f"{gender_emoji} Возраст: {profile['age']}\n"
         f"📍 Город: {profile['city']}\n"
+        f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"
-        f"📝 {profile['bio']}\n\n"
-        f"👁 Просмотров: {profile['view_count']}"
+        f"📝 {profile['bio']}"
     )
 
 

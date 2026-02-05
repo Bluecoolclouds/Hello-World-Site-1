@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.states.states import Registration
+from bot.states.states import Registration, EditProfile
 from bot.keyboards.keyboards import get_main_menu
 from bot.db import Database, format_online_status
 
@@ -47,6 +47,15 @@ def get_preferences_keyboard() -> InlineKeyboardBuilder:
     return kb
 
 
+def get_looking_for_keyboard() -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Всё и сразу", callback_data="lookfor_all_now"))
+    kb.row(InlineKeyboardButton(text="Без обязательств", callback_data="lookfor_no_strings"))
+    kb.row(InlineKeyboardButton(text="Вирт", callback_data="lookfor_virt"))
+    kb.row(InlineKeyboardButton(text="Всё серьёзно", callback_data="lookfor_serious"))
+    return kb
+
+
 def get_cancel_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_reg"))
@@ -60,6 +69,18 @@ def get_skip_photo_keyboard() -> InlineKeyboardBuilder:
     return kb
 
 
+LOOKING_FOR_OPTIONS = {
+    'all_now': 'Всё и сразу',
+    'no_strings': 'Без обязательств',
+    'virt': 'Вирт',
+    'serious': 'Всё серьёзно'
+}
+
+
+def format_looking_for(looking_for: str) -> str:
+    return LOOKING_FOR_OPTIONS.get(looking_for, 'Не указано')
+
+
 def format_profile(user: dict) -> str:
     gender_text = "Парень" if user.get('gender') == 'м' else "Девушка"
     pref_text = {
@@ -68,17 +89,19 @@ def format_profile(user: dict) -> str:
         'все': 'Все'
     }.get(user.get('preferences', 'все'), 'Все')
     
+    looking_for_text = format_looking_for(user.get('looking_for', ''))
     online_status = format_online_status(user.get('last_active'))
     
     return (
         f"👤 <b>Ваша анкета:</b>\n\n"
-        f"📅 Возраст: {user['age']}\n"
-        f"⚧ Пол: {gender_text}\n"
-        f"📍 Город: {user['city']}\n"
-        f"💬 О себе: {user['bio']}\n"
-        f"💕 Ищу: {pref_text}\n"
-        f"{online_status}\n\n"
-        f"👁 Просмотров: {user.get('view_count', 0)}"
+        f"1. 📅 Возраст: {user['age']}\n"
+        f"2. ⚧ Пол: {gender_text}\n"
+        f"3. 📍 Город: {user['city']}\n"
+        f"4. 💬 О себе: {user['bio']}\n"
+        f"5. 💕 Кого показывать: {pref_text}\n"
+        f"6. 🎯 Я ищу: {looking_for_text}\n"
+        f"7. 📷 Фото/видео\n"
+        f"{online_status}"
     )
 
 
@@ -241,6 +264,16 @@ async def process_age(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("gender_"))
 async def process_gender(callback: CallbackQuery, state: FSMContext):
     gender = callback.data.split("_")[1]
+    data = await state.get_data()
+    
+    if data.get('editing_field') == 'gender':
+        db.update_user_field(callback.from_user.id, 'gender', gender)
+        await state.clear()
+        await callback.message.answer("✅ Пол обновлён!")
+        await show_updated_profile(callback.bot, callback.from_user.id)
+        await callback.answer()
+        return
+    
     await state.update_data(gender=gender)
     await state.set_state(Registration.preferences)
     
@@ -255,7 +288,41 @@ async def process_gender(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("pref_"))
 async def process_preferences(callback: CallbackQuery, state: FSMContext):
     pref = callback.data.split("_")[1]
+    data = await state.get_data()
+    
+    if data.get('editing_field') == 'preferences':
+        db.update_user_field(callback.from_user.id, 'preferences', pref)
+        await state.clear()
+        await callback.message.answer("✅ Предпочтения обновлены!")
+        await show_updated_profile(callback.bot, callback.from_user.id)
+        await callback.answer()
+        return
+    
     await state.update_data(preferences=pref)
+    await state.set_state(Registration.looking_for)
+    
+    kb = get_looking_for_keyboard()
+    await callback.message.edit_text(
+        "Что ты ищешь?",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("lookfor_"))
+async def process_looking_for(callback: CallbackQuery, state: FSMContext):
+    looking_for = callback.data.split("_", 1)[1]
+    data = await state.get_data()
+    
+    if data.get('editing_field') == 'looking_for':
+        db.update_user_field(callback.from_user.id, 'looking_for', looking_for)
+        await state.clear()
+        await callback.message.answer("✅ Обновлено!")
+        await show_updated_profile(callback.bot, callback.from_user.id)
+        await callback.answer()
+        return
+    
+    await state.update_data(looking_for=looking_for)
     await state.set_state(Registration.city)
     
     kb = get_cancel_keyboard()
@@ -353,6 +420,18 @@ async def skip_photo(callback: CallbackQuery, state: FSMContext):
 
 async def finish_registration(bot, user_id: int, state: FSMContext):
     data = await state.get_data()
+    is_editing = data.get('editing')
+    
+    if is_editing:
+        photo_id = data.get('photo_id')
+        media_type = data.get('media_type')
+        db.update_user_field(user_id, 'photo_id', photo_id)
+        db.update_user_field(user_id, 'media_type', media_type)
+        await state.clear()
+        await bot.send_message(user_id, "✅ Фото/видео обновлено!")
+        await show_updated_profile(bot, user_id)
+        return
+    
     db.save_user(user_id, data)
     await state.clear()
     
@@ -388,20 +467,14 @@ async def start_search_callback(callback: CallbackQuery):
 @router.callback_query(F.data == "edit_profile")
 async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
     kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="📅 Возраст", callback_data="edit_age"),
-        InlineKeyboardButton(text="📍 Город", callback_data="edit_city")
-    )
-    kb.row(
-        InlineKeyboardButton(text="💬 О себе", callback_data="edit_bio"),
-        InlineKeyboardButton(text="💕 Предпочтения", callback_data="edit_pref")
-    )
-    kb.row(
-        InlineKeyboardButton(text="📷 Фото", callback_data="edit_photo")
-    )
-    kb.row(
-        InlineKeyboardButton(text="🔙 Назад", callback_data="show_profile")
-    )
+    kb.row(InlineKeyboardButton(text="1. 📅 Возраст", callback_data="edit_age"))
+    kb.row(InlineKeyboardButton(text="2. ⚧ Пол", callback_data="edit_gender"))
+    kb.row(InlineKeyboardButton(text="3. 📍 Город", callback_data="edit_city"))
+    kb.row(InlineKeyboardButton(text="4. 💬 О себе", callback_data="edit_bio"))
+    kb.row(InlineKeyboardButton(text="5. 💕 Кого показывать", callback_data="edit_pref"))
+    kb.row(InlineKeyboardButton(text="6. 🎯 Я ищу", callback_data="edit_looking_for"))
+    kb.row(InlineKeyboardButton(text="7. 📷 Фото/видео", callback_data="edit_photo"))
+    kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data="show_profile"))
     
     await callback.message.answer(
         "✏️ <b>Что хотите изменить?</b>",
@@ -412,6 +485,7 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "edit_photo")
 async def edit_photo_callback(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(editing=True)
     await state.set_state(Registration.photo)
     
     kb = get_skip_photo_keyboard()
@@ -420,3 +494,99 @@ async def edit_photo_callback(callback: CallbackQuery, state: FSMContext):
         reply_markup=kb.as_markup()
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "edit_age")
+async def edit_age_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.age)
+    await callback.message.answer("📅 Введите новый возраст (18-60):")
+    await callback.answer()
+
+
+@router.message(EditProfile.age)
+async def process_edit_age(message: Message, state: FSMContext):
+    if not message.text or not message.text.isdigit() or not (18 <= int(message.text) <= 60):
+        await message.answer("⚠️ Введите корректный возраст (число от 18 до 60):")
+        return
+    db.update_user_field(message.from_user.id, 'age', int(message.text))
+    await state.clear()
+    await message.answer("✅ Возраст обновлён!")
+    await show_updated_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_gender")
+async def edit_gender_callback(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(editing_field='gender')
+    kb = get_gender_keyboard()
+    await callback.message.answer("⚧ Выберите пол:", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_city")
+async def edit_city_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.city)
+    await callback.message.answer("📍 Введите новый город:")
+    await callback.answer()
+
+
+@router.message(EditProfile.city)
+async def process_edit_city(message: Message, state: FSMContext):
+    if not message.text or len(message.text) < 2:
+        await message.answer("⚠️ Название города слишком короткое. Введите ещё раз:")
+        return
+    db.update_user_field(message.from_user.id, 'city', message.text.strip().title())
+    await state.clear()
+    await message.answer("✅ Город обновлён!")
+    await show_updated_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_bio")
+async def edit_bio_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.bio)
+    await callback.message.answer(
+        "💬 Расскажи о себе:\n(минимум 3 символа или '-' чтобы пропустить)"
+    )
+    await callback.answer()
+
+
+@router.message(EditProfile.bio)
+async def process_edit_bio(message: Message, state: FSMContext):
+    bio_text = message.text.strip() if message.text else ""
+    if bio_text != "-" and len(bio_text) < 3:
+        await message.answer("⚠️ Минимум 3 символа или '-' чтобы пропустить:")
+        return
+    if bio_text == "-":
+        bio_text = "Не указано"
+    db.update_user_field(message.from_user.id, 'bio', bio_text)
+    await state.clear()
+    await message.answer("✅ О себе обновлено!")
+    await show_updated_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_pref")
+async def edit_pref_callback(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(editing_field='preferences')
+    kb = get_preferences_keyboard()
+    await callback.message.answer("💕 Кого показывать?", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_looking_for")
+async def edit_looking_for_callback(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(editing_field='looking_for')
+    kb = get_looking_for_keyboard()
+    await callback.message.answer("🎯 Что ты ищешь?", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+async def show_updated_profile(bot, user_id: int):
+    user = db.get_user(user_id)
+    if not user:
+        return
+    profile_text = format_profile(user)
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_profile"),
+        InlineKeyboardButton(text="🔍 Искать", callback_data="start_search")
+    )
+    await send_profile_with_photo(bot, user_id, user, profile_text, kb.as_markup())

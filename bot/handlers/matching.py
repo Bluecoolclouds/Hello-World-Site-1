@@ -99,12 +99,15 @@ async def view_match_profile(callback: CallbackQuery):
         await callback.answer("❌ Профиль не найден")
         return
     
+    from bot.handlers.registration import format_looking_for
     gender_emoji = "👨" if user.get('gender') == 'м' else "👩"
     online_status = format_online_status(user.get('last_active'))
+    looking_for_text = format_looking_for(user.get('looking_for', ''))
     profile_text = (
         f"💕 Профиль матча:\n\n"
         f"{gender_emoji} Возраст: {user['age']}\n"
         f"📍 Город: {user['city']}\n"
+        f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"
         f"📝 {user['bio']}"
     )
@@ -127,12 +130,15 @@ def get_like_review_keyboard(liker_id: int) -> InlineKeyboardBuilder:
 def format_liker_profile(profile: dict) -> str:
     """Format profile text for liker"""
     from bot.db import format_online_status
+    from bot.handlers.registration import format_looking_for
     gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
     online_status = format_online_status(profile.get('last_active'))
+    looking_for_text = format_looking_for(profile.get('looking_for', ''))
     return (
         f"💘 Этот человек вас лайкнул!\n\n"
         f"{gender_emoji} Возраст: {profile['age']}\n"
         f"📍 Город: {profile['city']}\n"
+        f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"
         f"📝 {profile['bio']}"
     )
