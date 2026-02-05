@@ -25,6 +25,7 @@ class Database:
                     preferences TEXT,
                     rating INTEGER DEFAULT 0,
                     is_active BOOLEAN DEFAULT 1,
+                    photos TEXT, -- JSON array of photo file IDs
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -50,12 +51,21 @@ class Database:
             """)
             conn.commit()
 
-    def create_user(self, user_id, username, age, gender, city, bio, preferences):
+    def create_user(self, user_id, username, age, gender, city, bio, preferences, photos=None):
+        import json
+        photos_json = json.dumps(photos) if photos else "[]"
         with self._get_connection() as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, username, age, gender, city, bio, preferences))
+                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, photos)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, username, age, gender, city, bio, preferences, photos_json))
+            conn.commit()
+
+    def update_photos(self, user_id, photos):
+        import json
+        photos_json = json.dumps(photos)
+        with self._get_connection() as conn:
+            conn.execute("UPDATE users SET photos = ? WHERE user_id = ?", (photos_json, user_id))
             conn.commit()
 
     def get_user(self, user_id):
