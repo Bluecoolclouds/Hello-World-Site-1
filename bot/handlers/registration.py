@@ -16,7 +16,7 @@ def get_start_keyboard(has_profile: bool) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     if has_profile:
         kb.row(
-            InlineKeyboardButton(text="👤 Моя анкета", callback_data="show_profile"),
+            InlineKeyboardButton(text="✏️ Изменить", callback_data="show_profile"),
             InlineKeyboardButton(text="🔍 Искать", callback_data="start_search")
         )
     else:

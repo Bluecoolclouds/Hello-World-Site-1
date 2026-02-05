@@ -161,90 +161,77 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def _build_search_query(self, user_id: int, city_condition: str, city_value: str, 
+                             preferences: str, current_age: int, looking_for: str = None,
+                             min_age: int = None, max_age: int = None, match_looking_for: bool = False):
+        gender_filter = None
+        if preferences == 'м':
+            gender_filter = 'м'
+        elif preferences == 'ж':
+            gender_filter = 'ж'
+
+        query = f"""
+            SELECT * FROM users 
+            WHERE user_id != ? 
+            AND city {city_condition} ? 
+            AND (is_banned = 0 OR is_banned IS NULL)
+            AND (is_archived = 0 OR is_archived IS NULL)
+            AND user_id NOT IN (
+                SELECT to_user_id FROM likes WHERE from_user_id = ?
+            )
+            AND user_id NOT IN (
+                SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
+            )
+        """
+        params = [user_id, city_value, user_id, user_id]
+
+        if match_looking_for and looking_for:
+            query += " AND looking_for = ?"
+            params.append(looking_for)
+
+        if min_age is not None:
+            query += " AND age >= ?"
+            params.append(min_age)
+        if max_age is not None:
+            query += " AND age <= ?"
+            params.append(max_age)
+        if gender_filter:
+            query += " AND gender = ?"
+            params.append(gender_filter)
+
+        query += " ORDER BY ABS(age - ?) ASC, RANDOM() LIMIT 1"
+        params.append(current_age)
+        return query, params
+
     def get_random_profile(self, user_id: int, city: str, preferences: str, min_age: int = None, max_age: int = None) -> Optional[Dict]:
         city = normalize_city(city)
         
         current_user = self.get_user(user_id)
         current_age = current_user['age'] if current_user else 25
+        looking_for = current_user.get('looking_for', '') if current_user else ''
         
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            gender_filter = None
-            if preferences == 'м':
-                gender_filter = 'м'
-            elif preferences == 'ж':
-                gender_filter = 'ж'
-            
-            base_query = """
-                SELECT * FROM users 
-                WHERE user_id != ? 
-                AND city = ? 
-                AND (is_banned = 0 OR is_banned IS NULL)
-                AND (is_archived = 0 OR is_archived IS NULL)
-                AND user_id NOT IN (
-                    SELECT to_user_id FROM likes WHERE from_user_id = ?
+
+            search_order = [
+                ("=", city, True),
+                ("=", city, False),
+                ("!=", city, True),
+                ("!=", city, False),
+            ]
+
+            for city_cond, city_val, match_lf in search_order:
+                if match_lf and not looking_for:
+                    continue
+                q, p = self._build_search_query(
+                    user_id, city_cond, city_val, preferences, current_age,
+                    looking_for, min_age, max_age, match_lf
                 )
-                AND user_id NOT IN (
-                    SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
-                )
-            """
+                row = conn.execute(q, p).fetchone()
+                if row:
+                    return dict(row)
             
-            params = [user_id, city, user_id, user_id]
-            
-            if min_age is not None:
-                base_query += " AND age >= ?"
-                params.append(min_age)
-            
-            if max_age is not None:
-                base_query += " AND age <= ?"
-                params.append(max_age)
-            
-            if gender_filter:
-                base_query += " AND gender = ?"
-                params.append(gender_filter)
-            
-            base_query += " ORDER BY ABS(age - ?) ASC, RANDOM() LIMIT 1"
-            params.append(current_age)
-            
-            cursor = conn.execute(base_query, params)
-            row = cursor.fetchone()
-            if row:
-                return dict(row)
-            
-            other_query = """
-                SELECT * FROM users 
-                WHERE user_id != ? 
-                AND city != ? 
-                AND (is_banned = 0 OR is_banned IS NULL)
-                AND (is_archived = 0 OR is_archived IS NULL)
-                AND user_id NOT IN (
-                    SELECT to_user_id FROM likes WHERE from_user_id = ?
-                )
-                AND user_id NOT IN (
-                    SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
-                )
-            """
-            
-            other_params = [user_id, city, user_id, user_id]
-            
-            if min_age is not None:
-                other_query += " AND age >= ?"
-                other_params.append(min_age)
-            
-            if max_age is not None:
-                other_query += " AND age <= ?"
-                other_params.append(max_age)
-            
-            if gender_filter:
-                other_query += " AND gender = ?"
-                other_params.append(gender_filter)
-            
-            other_query += " ORDER BY ABS(age - ?) ASC, RANDOM() LIMIT 1"
-            other_params.append(current_age)
-            
-            cursor = conn.execute(other_query, other_params)
-            row = cursor.fetchone()
-            return dict(row) if row else None
+            return None
 
     def add_like(self, from_id: int, to_id: int) -> bool:
         with sqlite3.connect(self.db_path) as conn:
