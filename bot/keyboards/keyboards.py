@@ -5,7 +5,10 @@ def get_main_menu() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.row(
         KeyboardButton(text="🔍 Искать"),
-        KeyboardButton(text="👤 Профиль"),
+        KeyboardButton(text="👤 Профиль")
+    )
+    builder.row(
+        KeyboardButton(text="💑 Матчи"),
         KeyboardButton(text="💌 Чаты")
     )
     return builder.as_markup(resize_keyboard=True)
