@@ -30,7 +30,8 @@ def import_users(csv_path: str, gender: str = "ж"):
                 age = int(row.get('age', '0').strip())
                 city = row.get('city', '').strip().lower()
                 bio = row.get('bio', 'Не указано').strip()
-                photo_id = row.get('photo_id', '').strip()
+                media_id = row.get('media_id', '').strip()
+                media_type = row.get('media_type', '').strip().lower()
                 
                 if not city or age < 16 or age > 99:
                     print(f"Пропуск: age={age}, city={city}")
@@ -39,6 +40,9 @@ def import_users(csv_path: str, gender: str = "ж"):
                 
                 if not bio or bio == '-':
                     bio = "Не указано"
+                
+                if media_type not in ('photo', 'video', 'video_note'):
+                    media_type = ''
                 
                 preferences = "м" if gender == "ж" else "ж"
                 
@@ -52,8 +56,8 @@ def import_users(csv_path: str, gender: str = "ж"):
                      last_hour_reset, is_banned, last_active, is_archived, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
                 """, (user_id, None, age, gender, city, bio, preferences, '',
-                      photo_id if photo_id else None,
-                      'photo' if photo_id else None,
+                      media_id if media_id else None,
+                      media_type if media_type else None,
                       now, now))
                 
                 imported += 1
@@ -68,7 +72,8 @@ def import_users(csv_path: str, gender: str = "ж"):
     print(f"\nГотово!")
     print(f"Импортировано: {imported}")
     print(f"Пропущено: {skipped}")
-    print(f"ID диапазон: {fake_id_start} - {fake_id_start + imported - 1}")
+    if imported > 0:
+        print(f"ID диапазон: {fake_id_start} - {fake_id_start + imported - 1}")
 
 
 if __name__ == "__main__":
@@ -76,10 +81,13 @@ if __name__ == "__main__":
         print("Использование: python3 bot/import_users.py data.csv")
         print("")
         print("CSV формат (с заголовками):")
-        print("age,city,bio,photo_id")
-        print("22,москва,Люблю путешествия,AgACAgIAAxk...")
+        print("age,city,bio,media_id,media_type")
+        print("22,москва,Люблю путешествия,AgACAgIAAxk...,photo")
+        print("25,астрахань,Привет!,BAACAgIAAxk...,video")
+        print("19,казань,-,,")
         print("")
-        print("photo_id — file_id фото из Telegram (можно оставить пустым)")
+        print("media_id  — file_id из Telegram (фото или видео)")
+        print("media_type — photo / video / video_note (пусто = без медиа)")
         sys.exit(1)
     
     csv_path = sys.argv[1]
