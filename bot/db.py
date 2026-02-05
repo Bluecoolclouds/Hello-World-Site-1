@@ -109,16 +109,18 @@ class Database:
         city = normalize_city(data['city'])
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, created_at)
+                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, last_active, is_archived, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?,
                     (SELECT COALESCE(view_count, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(last_search_at, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(search_count_hour, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(last_hour_reset, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(is_banned, 0) FROM users WHERE user_id = ?),
+                    COALESCE((SELECT last_active FROM users WHERE user_id = ?), strftime('%s', 'now')),
+                    COALESCE((SELECT is_archived FROM users WHERE user_id = ?), 0),
                     COALESCE((SELECT created_at FROM users WHERE user_id = ?), strftime('%s', 'now'))
                 )
-            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id))
+            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id))
 
     def get_user(self, user_id: int) -> Optional[Dict]:
         with sqlite3.connect(self.db_path) as conn:
