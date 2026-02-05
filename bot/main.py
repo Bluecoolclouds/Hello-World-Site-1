@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from aiogram import Bot, Dispatcher
-from bot.handlers import registration, profile, example_usage
+from bot.handlers import registration, profile, search, example_usage
 
 async def main():
     logging.basicConfig(level=logging.INFO)
@@ -15,6 +15,7 @@ async def main():
     # Регистрация роутеров
     dp.include_router(registration.router)
     dp.include_router(profile.router)
+    dp.include_router(search.router)
     dp.include_router(example_usage.router)
 
     logging.info("Бот запущен")
