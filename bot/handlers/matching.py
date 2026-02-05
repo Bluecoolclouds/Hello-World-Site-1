@@ -111,19 +111,120 @@ async def view_match_profile(callback: CallbackQuery):
     await callback.answer()
 
 
+def get_like_review_keyboard(liker_id: int) -> InlineKeyboardBuilder:
+    """Keyboard for reviewing incoming likes"""
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_back_{liker_id}"),
+        InlineKeyboardButton(text="💔 Пропустить", callback_data=f"skip_liker_{liker_id}")
+    )
+    return kb
+
+
+def format_liker_profile(profile: dict) -> str:
+    """Format profile text for liker"""
+    from bot.db import format_online_status
+    gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
+    online_status = format_online_status(profile.get('last_active'))
+    return (
+        f"💘 Этот человек вас лайкнул!\n\n"
+        f"{gender_emoji} Возраст: {profile['age']}\n"
+        f"📍 Город: {profile['city']}\n"
+        f"{online_status}\n\n"
+        f"📝 {profile['bio']}"
+    )
+
+
 @router.message(Command("likes"))
 async def cmd_likes(message: Message):
     user_id = message.from_user.id
+    await show_next_liker(message.bot, user_id)
+
+
+@router.callback_query(F.data == "view_my_likes")
+async def view_my_likes(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    await callback.answer()
+    await show_next_liker(callback.bot, user_id)
+
+
+async def show_next_liker(bot, user_id: int):
+    """Show the next person who liked this user"""
     likes = db.get_received_likes(user_id)
     
     if not likes:
-        await message.answer(
+        await bot.send_message(
+            user_id,
             "💔 Пока никто не поставил вам лайк.\n\n"
             "Улучшите профиль или продолжайте искать!"
         )
         return
     
-    likes_text = f"❤️ Вас лайкнули ({len(likes)} чел.):\n\n"
-    likes_text += "Поставьте лайк в ответ, чтобы создать матч!"
+    liker_id = likes[0]['from_user_id']
+    liker = db.get_user(liker_id)
     
-    await message.answer(likes_text)
+    if not liker:
+        db.remove_like(liker_id, user_id)
+        await show_next_liker(bot, user_id)
+        return
+    
+    remaining = len(likes)
+    profile_text = format_liker_profile(liker)
+    if remaining > 1:
+        profile_text += f"\n\n📬 Ещё лайков: {remaining - 1}"
+    
+    kb = get_like_review_keyboard(liker_id)
+    await bot.send_message(user_id, profile_text, reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data.startswith("like_back_"))
+async def handle_like_back(callback: CallbackQuery):
+    """Handle liking back someone who liked you"""
+    liker_id = int(callback.data.split("_")[2])
+    user_id = callback.from_user.id
+    
+    is_match = db.add_like(user_id, liker_id)
+    
+    if is_match:
+        db.create_match(user_id, liker_id)
+        
+        liker = db.get_user(liker_id)
+        user = db.get_user(user_id)
+        
+        kb_to_liker = get_match_keyboard(user_id)
+        await callback.message.answer(
+            "🎉 Это МАТЧ! ❤️\n\n"
+            "Вы понравились друг другу!\n"
+            "Напишите первым(ой)!",
+            reply_markup=kb_to_liker.as_markup()
+        )
+        
+        try:
+            kb_to_user = get_match_keyboard(liker_id)
+            await callback.bot.send_message(
+                liker_id,
+                "🎉 У вас новый МАТЧ! ❤️\n\n"
+                "Кто-то ответил вам взаимностью!\n"
+                "Не упустите момент!",
+                reply_markup=kb_to_user.as_markup()
+            )
+        except Exception:
+            pass
+        
+        await callback.answer("💕 Это матч!")
+    else:
+        await callback.answer("💕 Лайк отправлен!")
+    
+    await show_next_liker(callback.bot, user_id)
+
+
+@router.callback_query(F.data.startswith("skip_liker_"))
+async def handle_skip_liker(callback: CallbackQuery):
+    """Skip a liker without liking back"""
+    liker_id = int(callback.data.split("_")[2])
+    user_id = callback.from_user.id
+    
+    db.remove_like(liker_id, user_id)
+    
+    await callback.answer("⏭ Пропущено")
+    await show_next_liker(callback.bot, user_id)

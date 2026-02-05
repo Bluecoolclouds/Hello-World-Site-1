@@ -192,6 +192,11 @@ class Database:
             cursor = conn.execute("SELECT 1 FROM likes WHERE from_user_id = ? AND to_user_id = ?", (to_id, from_id))
             return cursor.fetchone() is not None
 
+    def remove_like(self, from_id: int, to_id: int):
+        """Remove a like (used when user skips someone who liked them)"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM likes WHERE from_user_id = ? AND to_user_id = ?", (from_id, to_id))
+
     def create_match(self, user1_id: int, user2_id: int):
         min_id, max_id = min(user1_id, user2_id), max(user1_id, user2_id)
         with sqlite3.connect(self.db_path) as conn:

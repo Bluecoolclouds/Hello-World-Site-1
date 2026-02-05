@@ -161,8 +161,26 @@ async def handle_like(callback: CallbackQuery):
         await check_and_notify_match(callback, from_id, to_id)
     else:
         await callback.answer("💕 Лайк отправлен!")
+        await notify_new_like(callback.bot, to_id, from_id)
     
     await show_next_profile(callback)
+
+
+async def notify_new_like(bot, to_user_id: int, from_user_id: int):
+    """Notify user that someone liked them"""
+    try:
+        kb = InlineKeyboardBuilder()
+        kb.row(
+            InlineKeyboardButton(text="👀 Посмотреть кто", callback_data="view_my_likes")
+        )
+        await bot.send_message(
+            to_user_id,
+            "💘 Вас кто-то оценил!\n\n"
+            "Хотите узнать кто? Нажмите кнопку ниже.",
+            reply_markup=kb.as_markup()
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "skip_profile")
