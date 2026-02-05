@@ -194,6 +194,42 @@ class Database:
             
             cursor = conn.execute(base_query, params)
             row = cursor.fetchone()
+            if row:
+                return dict(row)
+            
+            other_query = """
+                SELECT * FROM users 
+                WHERE user_id != ? 
+                AND city != ? 
+                AND (is_banned = 0 OR is_banned IS NULL)
+                AND (is_archived = 0 OR is_archived IS NULL)
+                AND user_id NOT IN (
+                    SELECT to_user_id FROM likes WHERE from_user_id = ?
+                )
+                AND user_id NOT IN (
+                    SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
+                )
+            """
+            
+            other_params = [user_id, city, user_id, user_id]
+            
+            if min_age is not None:
+                other_query += " AND age >= ?"
+                other_params.append(min_age)
+            
+            if max_age is not None:
+                other_query += " AND age <= ?"
+                other_params.append(max_age)
+            
+            if gender_filter:
+                other_query += " AND gender = ?"
+                other_params.append(gender_filter)
+            
+            other_query += " ORDER BY ABS(age - ?) ASC, RANDOM() LIMIT 1"
+            other_params.append(current_age)
+            
+            cursor = conn.execute(other_query, other_params)
+            row = cursor.fetchone()
             return dict(row) if row else None
 
     def add_like(self, from_id: int, to_id: int) -> bool:
