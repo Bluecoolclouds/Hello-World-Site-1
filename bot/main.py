@@ -8,6 +8,8 @@ from aiogram.enums import ParseMode
 
 from bot.handlers import registration, profile, search, matching, chats, admin
 from bot.db import Database
+from bot.middleware import ActivityMiddleware
+from bot.scheduler import start_scheduler
 
 load_dotenv()
 
@@ -22,6 +24,8 @@ async def on_startup(bot: Bot):
     logger.info("Бот запускается...")
     db = Database()
     logger.info("База данных инициализирована")
+    await start_scheduler()
+    logger.info("Планировщик задач запущен")
 
 
 async def on_shutdown(bot: Bot):
@@ -40,6 +44,9 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
+    
+    dp.message.middleware(ActivityMiddleware())
+    dp.callback_query.middleware(ActivityMiddleware())
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

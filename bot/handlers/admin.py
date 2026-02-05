@@ -27,6 +27,7 @@ async def cmd_admin_stats(message: Message):
         "📊 Статистика бота:\n\n"
         f"👥 Всего пользователей: {stats['total_users']}\n"
         f"👤 Активных за сутки: {stats['active_today']}\n"
+        f"📦 В архиве: {stats.get('archived_users', 0)}\n"
         f"❤️ Всего лайков: {stats['total_likes']}\n"
         f"💑 Всего матчей: {stats['total_matches']}\n"
         f"🚫 Забанено: {stats['banned_users']}\n\n"
@@ -183,3 +184,43 @@ async def cmd_admin_broadcast(message: Message):
             failed += 1
     
     await message.answer(f"✅ Рассылка завершена.\nОтправлено: {sent}\nОшибок: {failed}")
+
+
+@router.message(Command("admin_cleanup"))
+async def cmd_admin_cleanup(message: Message):
+    """Ручной запуск архивации неактивных пользователей"""
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Доступ запрещён.")
+        return
+    
+    await message.answer("🔄 Запускаю архивацию неактивных пользователей...")
+    
+    archived_count = db.archive_inactive_users(days=7)
+    
+    await message.answer(
+        f"✅ Архивация завершена!\n"
+        f"📦 Архивировано пользователей: {archived_count}"
+    )
+
+
+@router.message(Command("admin_archive_stats"))
+async def cmd_admin_archive_stats(message: Message):
+    """Статистика по архивации и онлайну"""
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Доступ запрещён.")
+        return
+    
+    stats = db.get_archive_stats()
+    
+    stats_text = (
+        "📊 <b>Статистика активности:</b>\n\n"
+        f"👥 Всего пользователей: {stats['total']}\n"
+        f"✅ Активных: {stats['active']}\n"
+        f"📦 В архиве: {stats['archived']}\n\n"
+        f"<b>Онлайн статистика:</b>\n"
+        f"🟢 Онлайн сейчас (5 мин): {stats['online_5min']}\n"
+        f"🟡 Был за последний час: {stats['online_hour']}\n"
+        f"🟠 Был за последние сутки: {stats['online_day']}"
+    )
+    
+    await message.answer(stats_text)
