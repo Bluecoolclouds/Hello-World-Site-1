@@ -94,6 +94,51 @@ async def search_for_user(user_id: int, message: Message):
     )
 
 
+async def search_for_user_via_bot(user_id: int, bot):
+    """Поиск анкеты через объект бота (для callback)"""
+    from aiogram import Bot
+    user = db.get_user(user_id)
+    
+    if not user:
+        await bot.send_message(user_id, "❌ Сначала зарегистрируйтесь! /start")
+        return
+
+    now = time.time()
+    
+    can_search, error_msg = check_cooldown(user, now)
+    if not can_search:
+        await bot.send_message(user_id, error_msg)
+        return
+    
+    can_search, error_msg = check_hourly_limit(user, now)
+    if not can_search:
+        await bot.send_message(user_id, error_msg)
+        return
+
+    profile = db.get_random_profile(user_id, user['city'], user['preferences'])
+    
+    if not profile:
+        await bot.send_message(
+            user_id,
+            "😔 К сожалению, в вашем городе пока нет новых анкет.\n"
+            "Попробуйте позже или измените настройки поиска."
+        )
+        return
+
+    db.update_search_stats(user_id, now)
+    db.increment_view_count(profile['user_id'])
+    
+    profile_text = format_profile_text(profile)
+    kb = get_search_keyboard(profile['user_id'])
+
+    await bot.send_photo(
+        chat_id=user_id,
+        photo=PHOTO_URL,
+        caption=profile_text,
+        reply_markup=kb.as_markup()
+    )
+
+
 @router.message(Command("search"))
 @router.message(F.text == "🔍 Искать")
 async def cmd_search(message: Message):

@@ -260,8 +260,11 @@ async def process_preferences(callback: CallbackQuery, state: FSMContext):
         InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
     )
     
-    await callback.message.answer_photo(
-        PHOTO_URL,
+    await callback.message.edit_text("✅ Анкета создана!")
+    
+    await callback.bot.send_photo(
+        chat_id=callback.from_user.id,
+        photo=PHOTO_URL,
         caption=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
         reply_markup=kb.as_markup()
     )
@@ -270,8 +273,8 @@ async def process_preferences(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "start_search")
 async def start_search_callback(callback: CallbackQuery):
-    from bot.handlers.search import search_for_user
-    await search_for_user(callback.from_user.id, callback.message)
+    from bot.handlers.search import search_for_user_via_bot
+    await search_for_user_via_bot(callback.from_user.id, callback.bot)
     await callback.answer()
 
 
