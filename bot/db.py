@@ -53,6 +53,8 @@ class Database:
                     city TEXT,
                     bio TEXT,
                     preferences TEXT,
+                    photo_id TEXT,
+                    media_type TEXT,
                     view_count INTEGER DEFAULT 0,
                     last_search_at REAL DEFAULT 0,
                     search_count_hour INTEGER DEFAULT 0,
@@ -79,6 +81,14 @@ class Database:
             if 'is_archived' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN is_archived INTEGER DEFAULT 0")
                 logger.info("Добавлена колонка is_archived")
+            
+            if 'photo_id' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN photo_id TEXT")
+                logger.info("Добавлена колонка photo_id")
+            
+            if 'media_type' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN media_type TEXT")
+                logger.info("Добавлена колонка media_type")
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -110,8 +120,8 @@ class Database:
         city = normalize_city(data['city'])
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, last_active, is_archived, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?,
+                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, photo_id, media_type, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, last_active, is_archived, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
                     (SELECT COALESCE(view_count, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(last_search_at, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(search_count_hour, 0) FROM users WHERE user_id = ?),
@@ -121,7 +131,7 @@ class Database:
                     COALESCE((SELECT is_archived FROM users WHERE user_id = ?), 0),
                     COALESCE((SELECT created_at FROM users WHERE user_id = ?), strftime('%s', 'now'))
                 )
-            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id))
+            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], data.get('photo_id'), data.get('media_type'), user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id))
 
     def get_user(self, user_id: int) -> Optional[Dict]:
         with sqlite3.connect(self.db_path) as conn:

@@ -91,6 +91,7 @@ async def cmd_matches(message: Message):
 
 @router.callback_query(F.data.startswith("view_match_"))
 async def view_match_profile(callback: CallbackQuery):
+    from bot.db import format_online_status
     match_id = int(callback.data.split("_")[2])
     user = db.get_user(match_id)
     
@@ -99,15 +100,17 @@ async def view_match_profile(callback: CallbackQuery):
         return
     
     gender_emoji = "👨" if user.get('gender') == 'м' else "👩"
+    online_status = format_online_status(user.get('last_active'))
     profile_text = (
         f"💕 Профиль матча:\n\n"
         f"{gender_emoji} Возраст: {user['age']}\n"
-        f"📍 Город: {user['city']}\n\n"
+        f"📍 Город: {user['city']}\n"
+        f"{online_status}\n\n"
         f"📝 {user['bio']}"
     )
     
     kb = get_match_keyboard(match_id)
-    await callback.message.answer(profile_text, reply_markup=kb.as_markup())
+    await send_profile_with_photo(callback.bot, callback.from_user.id, user, profile_text, kb.as_markup())
     await callback.answer()
 
 
@@ -133,6 +136,47 @@ def format_liker_profile(profile: dict) -> str:
         f"{online_status}\n\n"
         f"📝 {profile['bio']}"
     )
+
+
+async def send_profile_with_photo(bot, chat_id: int, profile: dict, text: str, reply_markup=None):
+    photo_id = profile.get('photo_id')
+    media_type = profile.get('media_type', 'photo')
+    
+    if photo_id:
+        try:
+            if media_type == 'video':
+                await bot.send_video(
+                    chat_id=chat_id,
+                    video=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup
+                )
+            elif media_type == 'video_note':
+                await bot.send_video_note(chat_id=chat_id, video_note=photo_id)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=reply_markup
+                )
+            else:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup
+                )
+        except Exception:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup
+            )
+    else:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup
+        )
 
 
 @router.message(Command("likes"))
@@ -174,7 +218,7 @@ async def show_next_liker(bot, user_id: int):
         profile_text += f"\n\n📬 Ещё лайков: {remaining - 1}"
     
     kb = get_like_review_keyboard(liker_id)
-    await bot.send_message(user_id, profile_text, reply_markup=kb.as_markup())
+    await send_profile_with_photo(bot, user_id, liker, profile_text, kb.as_markup())
 
 
 @router.callback_query(F.data.startswith("like_back_"))

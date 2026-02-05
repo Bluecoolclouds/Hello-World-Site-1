@@ -39,6 +39,47 @@ def format_profile_text(profile: dict) -> str:
     )
 
 
+async def send_profile_with_photo(bot, chat_id: int, profile: dict, text: str, reply_markup=None):
+    photo_id = profile.get('photo_id')
+    media_type = profile.get('media_type', 'photo')
+    
+    if photo_id:
+        try:
+            if media_type == 'video':
+                await bot.send_video(
+                    chat_id=chat_id,
+                    video=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup
+                )
+            elif media_type == 'video_note':
+                await bot.send_video_note(chat_id=chat_id, video_note=photo_id)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=reply_markup
+                )
+            else:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup
+                )
+        except Exception:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup
+            )
+    else:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup
+        )
+
+
 def check_cooldown(user: dict, now: float) -> tuple[bool, str]:
     last_search = user.get('last_search_at') or 0
     time_since_last = now - last_search
@@ -93,15 +134,11 @@ async def search_for_user(user_id: int, message: Message):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await message.answer(
-        profile_text,
-        reply_markup=kb.as_markup()
-    )
+    await send_profile_with_photo(message.bot, message.chat.id, profile, profile_text, kb.as_markup())
 
 
 async def search_for_user_via_bot(user_id: int, bot):
     """Поиск анкеты через объект бота (для callback)"""
-    from aiogram import Bot
     user = db.get_user(user_id)
     
     if not user:
@@ -136,11 +173,7 @@ async def search_for_user_via_bot(user_id: int, bot):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await bot.send_message(
-        chat_id=user_id,
-        text=profile_text,
-        reply_markup=kb.as_markup()
-    )
+    await send_profile_with_photo(bot, user_id, profile, profile_text, kb.as_markup())
 
 
 @router.message(Command("search"))
@@ -223,10 +256,7 @@ async def show_next_profile(callback: CallbackQuery):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await callback.message.answer(
-        profile_text,
-        reply_markup=kb.as_markup()
-    )
+    await send_profile_with_photo(callback.bot, user_id, profile, profile_text, kb.as_markup())
 
 
 @router.message(Command("stats"))

@@ -1,17 +1,15 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, ContentType
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.states.states import Registration
 from bot.keyboards.keyboards import get_main_menu
-from bot.db import Database
+from bot.db import Database, format_online_status
 
 router = Router()
 db = Database()
-
-PHOTO_URL = "https://via.placeholder.com/400x600.png?text=Profile+Photo"
 
 
 def get_start_keyboard(has_profile: bool) -> InlineKeyboardBuilder:
@@ -31,8 +29,8 @@ def get_start_keyboard(has_profile: bool) -> InlineKeyboardBuilder:
 def get_gender_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="👨 Мужской", callback_data="gender_м"),
-        InlineKeyboardButton(text="👩 Женский", callback_data="gender_ж")
+        InlineKeyboardButton(text="👨 Парень", callback_data="gender_м"),
+        InlineKeyboardButton(text="👩 Девушка", callback_data="gender_ж")
     )
     return kb
 
@@ -55,13 +53,22 @@ def get_cancel_keyboard() -> InlineKeyboardBuilder:
     return kb
 
 
+def get_skip_photo_keyboard() -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_photo"))
+    kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_reg"))
+    return kb
+
+
 def format_profile(user: dict) -> str:
-    gender_text = "Мужской" if user.get('gender') == 'м' else "Женский"
+    gender_text = "Парень" if user.get('gender') == 'м' else "Девушка"
     pref_text = {
         'м': 'Парни',
         'ж': 'Девушки',
         'все': 'Все'
     }.get(user.get('preferences', 'все'), 'Все')
+    
+    online_status = format_online_status(user.get('last_active'))
     
     return (
         f"👤 <b>Ваша анкета:</b>\n\n"
@@ -69,9 +76,56 @@ def format_profile(user: dict) -> str:
         f"⚧ Пол: {gender_text}\n"
         f"📍 Город: {user['city']}\n"
         f"💬 О себе: {user['bio']}\n"
-        f"💕 Ищу: {pref_text}\n\n"
+        f"💕 Ищу: {pref_text}\n"
+        f"{online_status}\n\n"
         f"👁 Просмотров: {user.get('view_count', 0)}"
     )
+
+
+async def send_profile_with_photo(bot, chat_id: int, user: dict, text: str, reply_markup=None):
+    photo_id = user.get('photo_id')
+    media_type = user.get('media_type', 'photo')
+    
+    if photo_id:
+        try:
+            if media_type == 'video':
+                await bot.send_video(
+                    chat_id=chat_id,
+                    video=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML"
+                )
+            elif media_type == 'video_note':
+                await bot.send_video_note(chat_id=chat_id, video_note=photo_id)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML"
+                )
+            else:
+                await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo_id,
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML"
+                )
+        except Exception:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
+    else:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
 
 
 @router.message(Command("start"))
@@ -87,9 +141,12 @@ async def cmd_start(message: Message, state: FSMContext):
         profile_text = format_profile(user)
         kb = get_start_keyboard(has_profile=True)
         
-        await message.answer(
+        await send_profile_with_photo(
+            message.bot,
+            message.chat.id,
+            user,
             f"👋 С возвращением!\n\n{profile_text}",
-            reply_markup=kb.as_markup()
+            kb.as_markup()
         )
     else:
         welcome_text = (
@@ -115,9 +172,12 @@ async def show_profile_callback(callback: CallbackQuery):
         InlineKeyboardButton(text="🔍 Искать", callback_data="start_search")
     )
     
-    await callback.message.answer(
+    await send_profile_with_photo(
+        callback.bot,
+        callback.from_user.id,
+        user,
         profile_text,
-        reply_markup=kb.as_markup()
+        kb.as_markup()
     )
     await callback.answer()
 
@@ -129,7 +189,7 @@ async def create_profile_callback(callback: CallbackQuery, state: FSMContext):
     kb = get_cancel_keyboard()
     await callback.message.answer(
         "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 1/5: Введите ваш возраст (18-60):",
+        "Сколько тебе лет? (18-60)",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
@@ -160,7 +220,7 @@ async def cancel_handler(message: Message, state: FSMContext):
 
 @router.message(Registration.age)
 async def process_age(message: Message, state: FSMContext):
-    if not message.text.isdigit() or not (18 <= int(message.text) <= 60):
+    if not message.text or not message.text.isdigit() or not (18 <= int(message.text) <= 60):
         kb = get_cancel_keyboard()
         await message.answer(
             "⚠️ Введите корректный возраст (число от 18 до 60):",
@@ -173,8 +233,7 @@ async def process_age(message: Message, state: FSMContext):
     
     kb = get_gender_keyboard()
     await message.answer(
-        "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 2/5: Выберите ваш пол:",
+        "Теперь определимся с полом:",
         reply_markup=kb.as_markup()
     )
 
@@ -183,12 +242,25 @@ async def process_age(message: Message, state: FSMContext):
 async def process_gender(callback: CallbackQuery, state: FSMContext):
     gender = callback.data.split("_")[1]
     await state.update_data(gender=gender)
+    await state.set_state(Registration.preferences)
+    
+    kb = get_preferences_keyboard()
+    await callback.message.edit_text(
+        "Кого показывать?",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pref_"))
+async def process_preferences(callback: CallbackQuery, state: FSMContext):
+    pref = callback.data.split("_")[1]
+    await state.update_data(preferences=pref)
     await state.set_state(Registration.city)
     
     kb = get_cancel_keyboard()
     await callback.message.edit_text(
-        "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 3/5: Из какого вы города?",
+        "Из какого ты города?",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
@@ -196,7 +268,7 @@ async def process_gender(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Registration.city)
 async def process_city(message: Message, state: FSMContext):
-    if len(message.text) < 2:
+    if not message.text or len(message.text) < 2:
         kb = get_cancel_keyboard()
         await message.answer(
             "⚠️ Название города слишком короткое. Введите ещё раз:",
@@ -209,8 +281,9 @@ async def process_city(message: Message, state: FSMContext):
     
     kb = get_cancel_keyboard()
     await message.answer(
-        "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 4/5: Расскажите о себе (или отправьте '-' чтобы пропустить):",
+        "Расскажи о себе и кого хочешь найти, чем предлагаешь заняться.\n"
+        "Это поможет лучше подобрать тебе компанию.\n\n"
+        "(минимум 3 символа или '-' чтобы пропустить)",
         reply_markup=kb.as_markup()
     )
 
@@ -219,61 +292,85 @@ async def process_city(message: Message, state: FSMContext):
 async def process_bio(message: Message, state: FSMContext):
     bio_text = message.text.strip() if message.text else ""
     
-    if bio_text and len(bio_text) < 3:
+    if bio_text != "-" and len(bio_text) < 3:
         kb = get_cancel_keyboard()
         await message.answer(
-            "⚠️ Био должно быть минимум 3 символа или оставьте пустым (отправьте '-'):",
+            "⚠️ Описание должно быть минимум 3 символа или отправь '-' чтобы пропустить:",
             reply_markup=kb.as_markup()
         )
         return
     
     if bio_text == "-":
-        bio_text = ""
+        bio_text = "Не указано"
     
-    await state.update_data(bio=bio_text if bio_text else "Не указано")
-    await state.set_state(Registration.preferences)
+    await state.update_data(bio=bio_text)
+    await state.set_state(Registration.photo)
     
-    kb = get_preferences_keyboard()
+    kb = get_skip_photo_keyboard()
     await message.answer(
-        "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 5/5: Кого вы ищете?",
+        "📸 Пришли своё фото или запиши видео (до 15 сек).\n\n"
+        "Анкеты, где видно лицо, собирают больше лайков ❤️\n\n"
+        "❗️Чужие фото и картинки из интернета не подходят",
         reply_markup=kb.as_markup()
     )
 
 
-@router.callback_query(F.data.startswith("pref_"))
-async def process_preferences(callback: CallbackQuery, state: FSMContext):
-    try:
-        pref = callback.data.split("_")[1]
-        await state.update_data(preferences=pref)
-        
-        data = await state.get_data()
-        db.save_user(callback.from_user.id, data)
-        await state.clear()
-        
-        user = db.get_user(callback.from_user.id)
-        profile_text = format_profile(user)
-        
-        kb = InlineKeyboardBuilder()
-        kb.row(
-            InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
-        )
-        
-        try:
-            await callback.message.edit_text("✅ Анкета создана!")
-        except Exception:
-            pass
-        
-        await callback.bot.send_message(
-            chat_id=callback.from_user.id,
-            text=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
+@router.message(Registration.photo, F.photo)
+async def process_photo(message: Message, state: FSMContext):
+    photo_id = message.photo[-1].file_id
+    await state.update_data(photo_id=photo_id, media_type='photo')
+    await finish_registration(message.bot, message.from_user.id, state)
+
+
+@router.message(Registration.photo, F.video)
+async def process_video(message: Message, state: FSMContext):
+    if message.video.duration > 15:
+        kb = get_skip_photo_keyboard()
+        await message.answer(
+            "⚠️ Видео должно быть не длиннее 15 секунд. Попробуй ещё раз:",
             reply_markup=kb.as_markup()
         )
-        await callback.answer("Регистрация завершена!")
-    except Exception as e:
-        import logging
-        logging.error(f"Error in process_preferences: {e}")
-        await callback.answer(f"Ошибка: {str(e)[:50]}", show_alert=True)
+        return
+    
+    video_id = message.video.file_id
+    await state.update_data(photo_id=video_id, media_type='video')
+    await finish_registration(message.bot, message.from_user.id, state)
+
+
+@router.message(Registration.photo, F.video_note)
+async def process_video_note(message: Message, state: FSMContext):
+    video_note_id = message.video_note.file_id
+    await state.update_data(photo_id=video_note_id, media_type='video_note')
+    await finish_registration(message.bot, message.from_user.id, state)
+
+
+@router.callback_query(F.data == "skip_photo")
+async def skip_photo(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(photo_id=None, media_type=None)
+    await finish_registration(callback.bot, callback.from_user.id, state)
+    await callback.answer()
+
+
+async def finish_registration(bot, user_id: int, state: FSMContext):
+    data = await state.get_data()
+    db.save_user(user_id, data)
+    await state.clear()
+    
+    user = db.get_user(user_id)
+    profile_text = format_profile(user)
+    
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
+    )
+    
+    await send_profile_with_photo(
+        bot,
+        user_id,
+        user,
+        f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
+        kb.as_markup()
+    )
 
 
 @router.callback_query(F.data == "start_search")
@@ -300,11 +397,26 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
         InlineKeyboardButton(text="💕 Предпочтения", callback_data="edit_pref")
     )
     kb.row(
+        InlineKeyboardButton(text="📷 Фото", callback_data="edit_photo")
+    )
+    kb.row(
         InlineKeyboardButton(text="🔙 Назад", callback_data="show_profile")
     )
     
     await callback.message.answer(
         "✏️ <b>Что хотите изменить?</b>",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_photo")
+async def edit_photo_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Registration.photo)
+    
+    kb = get_skip_photo_keyboard()
+    await callback.message.answer(
+        "📸 Пришли новое фото или видео (до 15 сек):",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
