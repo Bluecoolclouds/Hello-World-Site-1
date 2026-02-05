@@ -278,9 +278,14 @@ async def process_preferences(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "start_search")
 async def start_search_callback(callback: CallbackQuery):
-    from bot.handlers.search import search_for_user_via_bot
-    await search_for_user_via_bot(callback.from_user.id, callback.bot)
-    await callback.answer()
+    try:
+        from bot.handlers.search import search_for_user_via_bot
+        await search_for_user_via_bot(callback.from_user.id, callback.bot)
+        await callback.answer()
+    except Exception as e:
+        import logging
+        logging.error(f"Error in start_search: {e}")
+        await callback.answer(f"Ошибка: {str(e)[:50]}", show_alert=True)
 
 
 @router.callback_query(F.data == "edit_profile")
