@@ -1,7 +1,11 @@
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 import os
+import time
+import sqlite3
 
 from bot.db import Database
 
@@ -9,6 +13,10 @@ router = Router()
 db = Database()
 
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+
+
+class AdminStates(StatesGroup):
+    adding_profiles = State()
 
 
 def is_admin(user_id: int) -> bool:
@@ -224,3 +232,142 @@ async def cmd_admin_archive_stats(message: Message):
     )
     
     await message.answer(stats_text)
+
+
+@router.message(Command("admin_add"))
+async def cmd_admin_add(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Доступ запрещён.")
+        return
+
+    await state.set_state(AdminStates.adding_profiles)
+    await state.update_data(added=0, gender="ж")
+
+    await message.answer(
+        "📥 <b>Режим добавления анкет</b>\n\n"
+        "Отправляйте фото или видео с подписью в формате:\n"
+        "<code>возраст,город,описание</code>\n\n"
+        "Примеры:\n"
+        "<code>22,астрахань,Люблю путешествия</code>\n"
+        "<code>19,москва,-</code>\n\n"
+        "Описание <code>-</code> = «Не указано»\n"
+        "Пол: Девушка (по умолчанию)\n\n"
+        "Команды в режиме добавления:\n"
+        "/gender_m — переключить на парней\n"
+        "/gender_f — переключить на девушек\n"
+        "/done — завершить добавление"
+    )
+
+
+@router.message(AdminStates.adding_profiles, Command("gender_m"))
+async def cmd_gender_m(message: Message, state: FSMContext):
+    await state.update_data(gender="м")
+    await message.answer("👨 Пол переключён на: Парень")
+
+
+@router.message(AdminStates.adding_profiles, Command("gender_f"))
+async def cmd_gender_f(message: Message, state: FSMContext):
+    await state.update_data(gender="ж")
+    await message.answer("👩 Пол переключён на: Девушка")
+
+
+@router.message(AdminStates.adding_profiles, Command("done"))
+async def cmd_done_adding(message: Message, state: FSMContext):
+    data = await state.get_data()
+    added = data.get("added", 0)
+    await state.clear()
+    await message.answer(f"✅ Добавление завершено!\nДобавлено анкет: {added}")
+
+
+@router.message(AdminStates.adding_profiles, F.photo)
+async def handle_add_photo(message: Message, state: FSMContext):
+    caption = message.caption
+    if not caption:
+        await message.answer("❌ Нужна подпись к фото: <code>возраст,город,описание</code>")
+        return
+
+    await _process_media_profile(message, state, message.photo[-1].file_id, "photo", caption)
+
+
+@router.message(AdminStates.adding_profiles, F.video)
+async def handle_add_video(message: Message, state: FSMContext):
+    caption = message.caption
+    if not caption:
+        await message.answer("❌ Нужна подпись к видео: <code>возраст,город,описание</code>")
+        return
+
+    await _process_media_profile(message, state, message.video.file_id, "video", caption)
+
+
+@router.message(AdminStates.adding_profiles, F.video_note)
+async def handle_add_video_note(message: Message, state: FSMContext):
+    await message.answer(
+        "⚠️ Кружочки (видеосообщения) не поддерживают подписи.\n"
+        "Отправьте обычное видео или фото с подписью."
+    )
+
+
+@router.message(AdminStates.adding_profiles)
+async def handle_add_text(message: Message, state: FSMContext):
+    if message.text and not message.text.startswith("/"):
+        await message.answer(
+            "❌ Нужно отправить <b>фото</b> или <b>видео</b> с подписью.\n"
+            "Формат подписи: <code>возраст,город,описание</code>"
+        )
+
+
+async def _process_media_profile(message: Message, state: FSMContext, media_id: str, media_type: str, caption: str):
+    parts = caption.split(",", 2)
+    if len(parts) < 2:
+        await message.answer("❌ Неверный формат. Нужно: <code>возраст,город,описание</code>")
+        return
+
+    try:
+        age = int(parts[0].strip())
+    except ValueError:
+        await message.answer("❌ Возраст должен быть числом.")
+        return
+
+    if age < 16 or age > 99:
+        await message.answer("❌ Возраст должен быть от 16 до 99.")
+        return
+
+    city = parts[1].strip().lower()
+    if not city:
+        await message.answer("❌ Город не может быть пустым.")
+        return
+
+    bio = parts[2].strip() if len(parts) > 2 else "Не указано"
+    if bio == "-" or not bio:
+        bio = "Не указано"
+
+    state_data = await state.get_data()
+    gender = state_data.get("gender", "ж")
+    added = state_data.get("added", 0)
+
+    preferences = "м" if gender == "ж" else "ж"
+
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.execute("SELECT MAX(user_id) FROM users")
+    max_id = cursor.fetchone()[0] or 0
+    fake_id = max(max_id + 1, 9000000000)
+
+    now = time.time()
+    conn.execute("""
+        INSERT OR REPLACE INTO users
+        (user_id, username, age, gender, city, bio, preferences, looking_for,
+         photo_id, media_type, view_count, last_search_at, search_count_hour,
+         last_hour_reset, is_banned, last_active, is_archived, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
+    """, (fake_id, None, age, gender, city, bio, preferences, '',
+          media_id, media_type, now, now))
+    conn.commit()
+    conn.close()
+
+    added += 1
+    await state.update_data(added=added)
+
+    gender_label = "Д" if gender == "ж" else "П"
+    await message.answer(
+        f"✅ #{added} | {gender_label}, {age}, {city} | ID: {fake_id}"
+    )
