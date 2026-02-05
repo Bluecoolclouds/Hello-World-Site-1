@@ -1,6 +1,9 @@
 import sqlite3
 import time
+import logging
 from typing import Optional, Dict, List
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_city(city: str) -> str:
@@ -10,10 +13,34 @@ def normalize_city(city: str) -> str:
     return city.strip().lower()
 
 
+def format_online_status(last_active: float) -> str:
+    """Форматирование статуса онлайн"""
+    if not last_active:
+        return "🔘 Статус неизвестен"
+    
+    now = time.time()
+    diff = now - last_active
+    
+    if diff < 300:  # 5 минут
+        return "🟢 Онлайн"
+    elif diff < 3600:  # 1 час
+        minutes = int(diff / 60)
+        return f"🟡 Был(а) {minutes} мин. назад"
+    elif diff < 86400:  # 1 день
+        hours = int(diff / 3600)
+        return f"🟠 Был(а) {hours} ч. назад"
+    elif diff < 604800:  # 7 дней
+        days = int(diff / 86400)
+        return f"🔴 Был(а) {days} дн. назад"
+    else:
+        return "⚫ Неактивен >недели"
+
+
 class Database:
     def __init__(self, db_path="bot.db"):
         self.db_path = db_path
         self._create_tables()
+        self._migrate_tables()
 
     def _create_tables(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -31,9 +58,28 @@ class Database:
                     search_count_hour INTEGER DEFAULT 0,
                     last_hour_reset REAL DEFAULT 0,
                     is_banned INTEGER DEFAULT 0,
+                    last_active REAL DEFAULT (strftime('%s', 'now')),
+                    is_archived INTEGER DEFAULT 0,
                     created_at REAL DEFAULT (strftime('%s', 'now'))
                 )
             """)
+    
+    def _migrate_tables(self):
+        """Добавляем новые колонки если их нет"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'last_active' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN last_active REAL DEFAULT (strftime('%s', 'now'))")
+                conn.execute("UPDATE users SET last_active = strftime('%s', 'now') WHERE last_active IS NULL")
+                logger.info("Добавлена колонка last_active")
+            
+            if 'is_archived' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_archived INTEGER DEFAULT 0")
+                logger.info("Добавлена колонка is_archived")
+        
+        with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS likes (
                     from_user_id INTEGER,
@@ -107,6 +153,7 @@ class Database:
                 WHERE user_id != ? 
                 AND city = ? 
                 AND (is_banned = 0 OR is_banned IS NULL)
+                AND (is_archived = 0 OR is_archived IS NULL)
                 AND user_id NOT IN (
                     SELECT to_user_id FROM likes WHERE from_user_id = ?
                 )
@@ -307,8 +354,9 @@ class Database:
             
             total_users = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
             banned_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_banned = 1").fetchone()['count']
+            archived_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_archived = 1").fetchone()['count']
             active_today = conn.execute(
-                "SELECT COUNT(*) as count FROM users WHERE last_search_at > ?",
+                "SELECT COUNT(*) as count FROM users WHERE last_active > ?",
                 (day_ago,)
             ).fetchone()['count']
             
@@ -327,9 +375,72 @@ class Database:
             return {
                 'total_users': total_users,
                 'banned_users': banned_users,
+                'archived_users': archived_users,
                 'active_today': active_today,
                 'total_likes': total_likes,
                 'likes_today': likes_today,
                 'total_matches': total_matches,
                 'matches_today': matches_today
+            }
+    
+    def update_last_active(self, user_id: int):
+        """Обновить время последней активности пользователя"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET last_active = ? WHERE user_id = ?",
+                (time.time(), user_id)
+            )
+    
+    def unarchive_user(self, user_id: int):
+        """Разархивировать пользователя и обновить активность"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET is_archived = 0, last_active = ? WHERE user_id = ?",
+                (time.time(), user_id)
+            )
+            logger.info(f"Пользователь {user_id} разархивирован")
+    
+    def archive_inactive_users(self, days: int = 7) -> int:
+        """Архивировать неактивных пользователей (старше N дней)"""
+        threshold = time.time() - (days * 86400)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                UPDATE users 
+                SET is_archived = 1 
+                WHERE (last_active < ? OR last_active IS NULL)
+                AND (is_archived = 0 OR is_archived IS NULL)
+            """, (threshold,))
+            archived_count = cursor.rowcount
+            logger.info(f"Архивировано {archived_count} неактивных пользователей")
+            return archived_count
+    
+    def get_archive_stats(self) -> Dict:
+        """Получить статистику по архивации"""
+        now = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            total = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
+            archived = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_archived = 1").fetchone()['count']
+            active = conn.execute("SELECT COUNT(*) as count FROM users WHERE (is_archived = 0 OR is_archived IS NULL)").fetchone()['count']
+            online_5min = conn.execute(
+                "SELECT COUNT(*) as count FROM users WHERE last_active > ?",
+                (now - 300,)
+            ).fetchone()['count']
+            online_hour = conn.execute(
+                "SELECT COUNT(*) as count FROM users WHERE last_active > ?",
+                (now - 3600,)
+            ).fetchone()['count']
+            online_day = conn.execute(
+                "SELECT COUNT(*) as count FROM users WHERE last_active > ?",
+                (now - 86400,)
+            ).fetchone()['count']
+            
+            return {
+                'total': total,
+                'archived': archived,
+                'active': active,
+                'online_5min': online_5min,
+                'online_hour': online_hour,
+                'online_day': online_day
             }
