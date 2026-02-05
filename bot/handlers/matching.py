@@ -194,14 +194,11 @@ async def view_my_likes(callback: CallbackQuery):
 
 async def show_next_liker(bot, user_id: int):
     """Show the next person who liked this user"""
+    from bot.handlers.search import search_for_user_via_bot
     likes = db.get_received_likes(user_id)
     
     if not likes:
-        await bot.send_message(
-            user_id,
-            "💔 Пока никто не поставил вам лайк.\n\n"
-            "Улучшите профиль или продолжайте искать!"
-        )
+        await search_for_user_via_bot(user_id, bot)
         return
     
     liker_id = likes[0]['from_user_id']
