@@ -91,18 +91,29 @@ def format_profile(user: dict) -> str:
     
     looking_for_text = format_looking_for(user.get('looking_for', ''))
     online_status = format_online_status(user.get('last_active'))
+    bio = user.get('bio', 'Не указано')
     
-    return (
-        f"👤 <b>Ваша анкета:</b>\n\n"
-        f"1. 📅 Возраст: {user['age']}\n"
-        f"2. ⚧ Пол: {gender_text}\n"
-        f"3. 📍 Город: {user['city']}\n"
-        f"4. 💬 О себе: {user['bio']}\n"
-        f"5. 💕 Кого показывать: {pref_text}\n"
-        f"6. 🎯 Я ищу: {looking_for_text}\n"
-        f"7. 📷 Фото/видео\n"
-        f"{online_status}"
-    )
+    lines = [f"👤 <b>Ваша анкета:</b>\n"]
+    lines.append(f"1. Возраст: {user['age']}")
+    lines.append(f"2. Пол: {gender_text}")
+    lines.append(f"3. Город: {user['city']}")
+    
+    if bio and bio != "Не указано":
+        lines.append(f"4. 💬 О себе: {bio}")
+    else:
+        lines.append(f"4. О себе: Не указано")
+    
+    lines.append(f"5. Кого показывать: {pref_text}")
+    
+    if looking_for_text and looking_for_text != "Не указано":
+        lines.append(f"6. 🎯 Я ищу: {looking_for_text}")
+    else:
+        lines.append(f"6. Я ищу: Не указано")
+    
+    lines.append(f"7. Фото/видео")
+    lines.append(online_status)
+    
+    return "\n".join(lines)
 
 
 async def send_profile_with_photo(bot, chat_id: int, user: dict, text: str, reply_markup=None):
@@ -438,6 +449,7 @@ async def finish_registration(bot, user_id: int, state: FSMContext):
     
     kb = InlineKeyboardBuilder()
     kb.row(
+        InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_profile"),
         InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search")
     )
     
