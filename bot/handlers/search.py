@@ -1,4 +1,5 @@
 import time
+import asyncio
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.filters import Command
@@ -182,7 +183,7 @@ async def cmd_search(message: Message):
     await search_for_user(message.from_user.id, message)
 
 
-@router.callback_query(F.data.startswith("like_"))
+@router.callback_query(F.data.regexp(r"^like_\d+$"))
 async def handle_like(callback: CallbackQuery):
     to_id = int(callback.data.split("_")[1])
     from_id = callback.from_user.id
@@ -234,18 +235,26 @@ async def show_next_profile(callback: CallbackQuery):
     
     can_search, error_msg = check_cooldown(user, now)
     if not can_search:
-        await callback.message.answer(error_msg)
-        return
+        remaining = int(COOLDOWN_SECONDS - (now - (user.get('last_search_at') or 0)))
+        wait_msg = await callback.bot.send_message(user_id, error_msg)
+        await asyncio.sleep(max(remaining, 1))
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
+        user = db.get_user(user_id)
+        now = time.time()
     
     can_search, error_msg = check_hourly_limit(user, now)
     if not can_search:
-        await callback.message.answer(error_msg)
+        await callback.bot.send_message(user_id, error_msg)
         return
 
     profile = db.get_random_profile(user_id, user['city'], user['preferences'])
     
     if not profile:
-        await callback.message.answer(
+        await callback.bot.send_message(
+            user_id,
             "😔 Анкеты закончились! Возвращайтесь позже."
         )
         return
