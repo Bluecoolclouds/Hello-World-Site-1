@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from typing import Optional, Dict, List
 
 class Database:
@@ -20,7 +21,9 @@ class Database:
                     view_count INTEGER DEFAULT 0,
                     last_search_at REAL DEFAULT 0,
                     search_count_hour INTEGER DEFAULT 0,
-                    last_hour_reset REAL DEFAULT 0
+                    last_hour_reset REAL DEFAULT 0,
+                    is_banned INTEGER DEFAULT 0,
+                    created_at REAL DEFAULT (strftime('%s', 'now'))
                 )
             """)
             conn.execute("""
@@ -39,23 +42,40 @@ class Database:
                     PRIMARY KEY (user1_id, user2_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS blocked_users (
+                    user_id INTEGER,
+                    blocked_user_id INTEGER,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    PRIMARY KEY (user_id, blocked_user_id)
+                )
+            """)
 
     def save_user(self, user_id: int, data: Dict):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset)
+                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?,
                     (SELECT COALESCE(view_count, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(last_search_at, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(search_count_hour, 0) FROM users WHERE user_id = ?),
-                    (SELECT COALESCE(last_hour_reset, 0) FROM users WHERE user_id = ?)
+                    (SELECT COALESCE(last_hour_reset, 0) FROM users WHERE user_id = ?),
+                    (SELECT COALESCE(is_banned, 0) FROM users WHERE user_id = ?),
+                    COALESCE((SELECT created_at FROM users WHERE user_id = ?), strftime('%s', 'now'))
                 )
-            """, (user_id, data.get('username'), data['age'], data['gender'], data['city'], data['bio'], data['preferences'], user_id, user_id, user_id, user_id))
+            """, (user_id, data.get('username'), data['age'], data['gender'], data['city'], data['bio'], data['preferences'], user_id, user_id, user_id, user_id, user_id, user_id))
 
     def get_user(self, user_id: int) -> Optional[Dict]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             return dict(row) if row else None
 
@@ -68,27 +88,29 @@ class Database:
             elif preferences == 'ж':
                 gender_filter = 'ж'
             
+            base_query = """
+                SELECT * FROM users 
+                WHERE user_id != ? 
+                AND city = ? 
+                AND is_banned = 0
+                AND user_id NOT IN (
+                    SELECT to_user_id FROM likes WHERE from_user_id = ?
+                )
+                AND user_id NOT IN (
+                    SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
+                )
+            """
+            
             if gender_filter:
-                cursor = conn.execute("""
-                    SELECT * FROM users 
-                    WHERE user_id != ? 
-                    AND city = ? 
-                    AND gender = ?
-                    AND user_id NOT IN (
-                        SELECT to_user_id FROM likes WHERE from_user_id = ?
-                    )
-                    ORDER BY RANDOM() LIMIT 1
-                """, (user_id, city, gender_filter, user_id))
+                cursor = conn.execute(
+                    base_query + " AND gender = ? ORDER BY RANDOM() LIMIT 1",
+                    (user_id, city, user_id, user_id, gender_filter)
+                )
             else:
-                cursor = conn.execute("""
-                    SELECT * FROM users 
-                    WHERE user_id != ? 
-                    AND city = ?
-                    AND user_id NOT IN (
-                        SELECT to_user_id FROM likes WHERE from_user_id = ?
-                    )
-                    ORDER BY RANDOM() LIMIT 1
-                """, (user_id, city, user_id))
+                cursor = conn.execute(
+                    base_query + " ORDER BY RANDOM() LIMIT 1",
+                    (user_id, city, user_id, user_id)
+                )
             
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -106,6 +128,23 @@ class Database:
                 INSERT OR IGNORE INTO matches (user1_id, user2_id) 
                 VALUES (?, ?)
             """, (min_id, max_id))
+
+    def has_match(self, user1_id: int, user2_id: int) -> bool:
+        min_id, max_id = min(user1_id, user2_id), max(user1_id, user2_id)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT 1 FROM matches WHERE user1_id = ? AND user2_id = ?",
+                (min_id, max_id)
+            )
+            return cursor.fetchone() is not None
+
+    def delete_match(self, user1_id: int, user2_id: int):
+        min_id, max_id = min(user1_id, user2_id), max(user1_id, user2_id)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM matches WHERE user1_id = ? AND user2_id = ?",
+                (min_id, max_id)
+            )
 
     def get_user_matches(self, user_id: int) -> List[Dict]:
         with sqlite3.connect(self.db_path) as conn:
@@ -186,4 +225,90 @@ class Database:
                 'likes_received': likes_received,
                 'matches_count': matches_count,
                 'search_count_hour': user['search_count_hour']
+            }
+
+    def block_user(self, user_id: int, blocked_user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO blocked_users (user_id, blocked_user_id) VALUES (?, ?)",
+                (user_id, blocked_user_id)
+            )
+
+    def unblock_user(self, user_id: int, blocked_user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM blocked_users WHERE user_id = ? AND blocked_user_id = ?",
+                (user_id, blocked_user_id)
+            )
+
+    def is_blocked(self, user_id: int, other_user_id: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT 1 FROM blocked_users 
+                WHERE (user_id = ? AND blocked_user_id = ?)
+                OR (user_id = ? AND blocked_user_id = ?)
+            """, (user_id, other_user_id, other_user_id, user_id))
+            return cursor.fetchone() is not None
+
+    def get_blocked_users(self, user_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM blocked_users WHERE user_id = ?",
+                (user_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def ban_user(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+
+    def unban_user(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
+
+    def is_banned(self, user_id: int) -> bool:
+        user = self.get_user(user_id)
+        return user and user.get('is_banned', 0) == 1
+
+    def get_all_active_users(self) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM users WHERE is_banned = 0")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_global_stats(self) -> Dict:
+        now = time.time()
+        day_ago = now - 86400
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            total_users = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
+            banned_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_banned = 1").fetchone()['count']
+            active_today = conn.execute(
+                "SELECT COUNT(*) as count FROM users WHERE last_search_at > ?",
+                (day_ago,)
+            ).fetchone()['count']
+            
+            total_likes = conn.execute("SELECT COUNT(*) as count FROM likes").fetchone()['count']
+            likes_today = conn.execute(
+                "SELECT COUNT(*) as count FROM likes WHERE created_at > ?",
+                (day_ago,)
+            ).fetchone()['count']
+            
+            total_matches = conn.execute("SELECT COUNT(*) as count FROM matches").fetchone()['count']
+            matches_today = conn.execute(
+                "SELECT COUNT(*) as count FROM matches WHERE created_at > ?",
+                (day_ago,)
+            ).fetchone()['count']
+            
+            return {
+                'total_users': total_users,
+                'banned_users': banned_users,
+                'active_today': active_today,
+                'total_likes': total_likes,
+                'likes_today': likes_today,
+                'total_matches': total_matches,
+                'matches_today': matches_today
             }

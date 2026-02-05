@@ -49,7 +49,34 @@ Located in `shared/`:
 - **Migrations**: Output to `./migrations` directory
 - **Connection**: Requires `DATABASE_URL` environment variable
 
-Note: There's also a `db.py` file with SQLite schema for a Python-based dating bot, which appears to be reference material rather than active code.
+### Telegram Dating Bot (Python)
+The `bot/` directory contains a fully functional Telegram dating bot built with aiogram 3.x:
+
+**Structure:**
+- `main.py` - Entry point with dispatcher setup and polling
+- `db.py` - SQLite database with users, likes, matches, blocks tables
+- `handlers/` - Message and callback handlers:
+  - `registration.py` - User registration flow (/start)
+  - `profile.py` - View/edit profile (/profile)
+  - `search.py` - Find matches (/search, /stats)
+  - `matching.py` - Match notifications (/matches, /likes)
+  - `chats.py` - Chat management (/chats, /blocked)
+  - `admin.py` - Admin commands (/admin_stats, /admin_ban, /admin_unban)
+- `keyboards/` - Reply and inline keyboards
+- `states/` - FSM states for registration
+
+**Features:**
+- Search by city + gender preferences
+- 5 sec cooldown, 50/hour limit
+- Like/Skip with match notifications
+- Block/unblock users
+- Admin: stats, ban, unban, broadcast
+
+**Environment variables:**
+- `BOT_TOKEN` - Telegram bot token from @BotFather
+- `ADMIN_USER_ID` - Your Telegram user ID for admin access
+
+**Run:** `python3 bot/main.py`
 
 ### API Structure
 Routes are defined in `shared/routes.ts` with Zod validation:

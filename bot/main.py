@@ -1,29 +1,69 @@
 import asyncio
 import logging
 import os
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
-from bot.handlers import registration, profile, search, matching, example_usage
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
+from bot.handlers import registration, profile, search, matching, chats, admin
+from bot.db import Database
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+async def on_startup(bot: Bot):
+    logger.info("Бот запускается...")
+    db = Database()
+    logger.info("База данных инициализирована")
+
+
+async def on_shutdown(bot: Bot):
+    logger.info("Бот останавливается...")
+
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        logger.error("BOT_TOKEN не найден в переменных окружения!")
+        logger.error("Создайте файл .env с BOT_TOKEN=your_token_here")
+        return
     
-    # В реальном приложении токен должен быть в .env
-    token = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-    bot = Bot(token=token)
+    bot = Bot(
+        token=token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
     dp = Dispatcher()
 
-    # Регистрация роутеров
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+
+    dp.include_router(admin.router)
     dp.include_router(registration.router)
     dp.include_router(profile.router)
     dp.include_router(search.router)
     dp.include_router(matching.router)
-    dp.include_router(example_usage.router)
+    dp.include_router(chats.router)
 
-    logging.info("Бот запущен")
-    # await dp.start_polling(bot) # Закомментировано для примера
+    logger.info("Роутеры подключены")
+    logger.info("Бот запущен и готов к работе!")
+    
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        await bot.session.close()
+
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        logger.info("Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}")
