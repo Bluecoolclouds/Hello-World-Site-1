@@ -37,7 +37,8 @@ def format_profile_text(profile: dict) -> str:
 
 
 def check_cooldown(user: dict, now: float) -> tuple[bool, str]:
-    time_since_last = now - user['last_search_at']
+    last_search = user.get('last_search_at') or 0
+    time_since_last = now - last_search
     if time_since_last < COOLDOWN_SECONDS:
         remaining = int(COOLDOWN_SECONDS - time_since_last)
         return False, f"⏳ Подождите {remaining} сек. перед следующим поиском."
@@ -45,8 +46,10 @@ def check_cooldown(user: dict, now: float) -> tuple[bool, str]:
 
 
 def check_hourly_limit(user: dict, now: float) -> tuple[bool, str]:
-    time_since_reset = now - user['last_hour_reset']
-    if time_since_reset < HOUR_IN_SECONDS and user['search_count_hour'] >= HOURLY_LIMIT:
+    last_reset = user.get('last_hour_reset') or 0
+    search_count = user.get('search_count_hour') or 0
+    time_since_reset = now - last_reset
+    if time_since_reset < HOUR_IN_SECONDS and search_count >= HOURLY_LIMIT:
         minutes_left = int((HOUR_IN_SECONDS - time_since_reset) / 60)
         return False, f"🚫 Лимит просмотров ({HOURLY_LIMIT}/час) исчерпан. Попробуйте через {minutes_left} мин."
     return True, ""
