@@ -274,7 +274,8 @@ async def process_gender(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     
-    await state.update_data(gender=gender, preferences='все')
+    opposite = 'ж' if gender == 'м' else 'м'
+    await state.update_data(gender=gender, preferences=opposite)
     await state.set_state(Registration.looking_for)
     
     kb = get_looking_for_keyboard()
