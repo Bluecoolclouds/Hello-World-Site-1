@@ -274,12 +274,12 @@ async def process_gender(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     
-    await state.update_data(gender=gender)
-    await state.set_state(Registration.preferences)
+    await state.update_data(gender=gender, preferences='все')
+    await state.set_state(Registration.looking_for)
     
-    kb = get_preferences_keyboard()
+    kb = get_looking_for_keyboard()
     await callback.message.edit_text(
-        "Кого показывать?",
+        "Что ты ищешь?",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
