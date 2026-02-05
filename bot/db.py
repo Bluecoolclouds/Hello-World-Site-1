@@ -106,7 +106,7 @@ class Database:
                 SELECT * FROM users 
                 WHERE user_id != ? 
                 AND city = ? 
-                AND is_banned = 0
+                AND (is_banned = 0 OR is_banned IS NULL)
                 AND user_id NOT IN (
                     SELECT to_user_id FROM likes WHERE from_user_id = ?
                 )
