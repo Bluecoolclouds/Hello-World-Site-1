@@ -87,9 +87,8 @@ async def cmd_start(message: Message, state: FSMContext):
         profile_text = format_profile(user)
         kb = get_start_keyboard(has_profile=True)
         
-        await message.answer_photo(
-            PHOTO_URL,
-            caption=f"👋 С возвращением!\n\n{profile_text}",
+        await message.answer(
+            f"👋 С возвращением!\n\n{profile_text}",
             reply_markup=kb.as_markup()
         )
     else:
@@ -116,9 +115,8 @@ async def show_profile_callback(callback: CallbackQuery):
         InlineKeyboardButton(text="🔍 Искать", callback_data="start_search")
     )
     
-    await callback.message.answer_photo(
-        PHOTO_URL,
-        caption=profile_text,
+    await callback.message.answer(
+        profile_text,
         reply_markup=kb.as_markup()
     )
     await callback.answer()
@@ -266,10 +264,9 @@ async def process_preferences(callback: CallbackQuery, state: FSMContext):
         except Exception:
             pass
         
-        await callback.bot.send_photo(
+        await callback.bot.send_message(
             chat_id=callback.from_user.id,
-            photo=PHOTO_URL,
-            caption=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
+            text=f"✅ <b>Анкета создана!</b>\n\n{profile_text}",
             reply_markup=kb.as_markup()
         )
         await callback.answer("Регистрация завершена!")

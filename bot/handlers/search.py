@@ -87,9 +87,8 @@ async def search_for_user(user_id: int, message: Message):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await message.answer_photo(
-        PHOTO_URL,
-        caption=profile_text,
+    await message.answer(
+        profile_text,
         reply_markup=kb.as_markup()
     )
 
@@ -131,10 +130,9 @@ async def search_for_user_via_bot(user_id: int, bot):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await bot.send_photo(
+    await bot.send_message(
         chat_id=user_id,
-        photo=PHOTO_URL,
-        caption=profile_text,
+        text=profile_text,
         reply_markup=kb.as_markup()
     )
 
@@ -201,9 +199,8 @@ async def show_next_profile(callback: CallbackQuery):
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
 
-    await callback.message.answer_photo(
-        PHOTO_URL,
-        caption=profile_text,
+    await callback.message.answer(
+        profile_text,
         reply_markup=kb.as_markup()
     )
 
