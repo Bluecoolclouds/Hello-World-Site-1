@@ -343,14 +343,14 @@ async def process_city(message: Message, state: FSMContext):
         )
         return
     
-    await state.update_data(city=message.text.strip().title())
-    await state.set_state(Registration.bio)
+    await state.update_data(city=message.text.strip().title(), bio="Не указано")
+    await state.set_state(Registration.photo)
     
-    kb = get_cancel_keyboard()
+    kb = get_skip_photo_keyboard()
     await message.answer(
-        "Расскажи о себе и кого хочешь найти, чем предлагаешь заняться.\n"
-        "Это поможет лучше подобрать тебе компанию.\n\n"
-        "(минимум 3 символа или '-' чтобы пропустить)",
+        "📸 Пришли своё фото или запиши видео (до 15 сек).\n\n"
+        "Анкеты, где видно лицо, собирают больше лайков ❤️\n\n"
+        "❗️Чужие фото и картинки из интернета не подходят",
         reply_markup=kb.as_markup()
     )
 
