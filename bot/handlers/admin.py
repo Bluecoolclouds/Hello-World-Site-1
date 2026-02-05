@@ -1,13 +1,15 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import os
 import time
 import sqlite3
 
 from bot.db import Database
+from bot.keyboards.keyboards import get_main_menu
 
 router = Router()
 db = Database()
@@ -235,6 +237,7 @@ async def cmd_admin_archive_stats(message: Message):
 
 
 @router.message(Command("admin_add"))
+@router.message(F.text == "📥 Добавить анкеты")
 async def cmd_admin_add(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Доступ запрещён.")
@@ -242,6 +245,15 @@ async def cmd_admin_add(message: Message, state: FSMContext):
 
     await state.set_state(AdminStates.adding_profiles)
     await state.update_data(added=0, gender="ж")
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="👩 Девушки", callback_data="add_gender_ж"),
+        InlineKeyboardButton(text="👨 Парни", callback_data="add_gender_м")
+    )
+    kb.row(
+        InlineKeyboardButton(text="❌ Отмена", callback_data="add_done")
+    )
 
     await message.answer(
         "📥 <b>Режим добавления анкет</b>\n\n"
@@ -251,32 +263,41 @@ async def cmd_admin_add(message: Message, state: FSMContext):
         "<code>22,астрахань,Люблю путешествия</code>\n"
         "<code>19,москва,-</code>\n\n"
         "Описание <code>-</code> = «Не указано»\n"
-        "Пол: Девушка (по умолчанию)\n\n"
-        "Команды в режиме добавления:\n"
-        "/gender_m — переключить на парней\n"
-        "/gender_f — переключить на девушек\n"
-        "/done — завершить добавление"
+        "Пол: 👩 Девушка\n\n"
+        "Нажмите кнопку чтобы сменить пол или завершить.",
+        reply_markup=kb.as_markup()
     )
 
 
-@router.message(AdminStates.adding_profiles, Command("gender_m"))
-async def cmd_gender_m(message: Message, state: FSMContext):
-    await state.update_data(gender="м")
-    await message.answer("👨 Пол переключён на: Парень")
+@router.callback_query(F.data.startswith("add_gender_"))
+async def cb_add_gender(callback: CallbackQuery, state: FSMContext):
+    current = await state.get_state()
+    if current != AdminStates.adding_profiles.state:
+        await callback.answer()
+        return
+
+    gender = callback.data.split("_")[-1]
+    await state.update_data(gender=gender)
+    label = "👩 Девушка" if gender == "ж" else "👨 Парень"
+    await callback.message.edit_text(
+        f"📥 <b>Режим добавления анкет</b>\n\n"
+        f"Отправляйте фото или видео с подписью в формате:\n"
+        f"<code>возраст,город,описание</code>\n\n"
+        f"Пол: {label}\n\n"
+        f"Нажмите кнопку чтобы сменить пол или завершить.",
+        reply_markup=callback.message.reply_markup
+    )
+    await callback.answer(f"Пол: {label}")
 
 
-@router.message(AdminStates.adding_profiles, Command("gender_f"))
-async def cmd_gender_f(message: Message, state: FSMContext):
-    await state.update_data(gender="ж")
-    await message.answer("👩 Пол переключён на: Девушка")
-
-
-@router.message(AdminStates.adding_profiles, Command("done"))
-async def cmd_done_adding(message: Message, state: FSMContext):
+@router.callback_query(F.data == "add_done")
+async def cb_add_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     added = data.get("added", 0)
     await state.clear()
-    await message.answer(f"✅ Добавление завершено!\nДобавлено анкет: {added}")
+    await callback.message.edit_text(f"✅ Добавление завершено!\nДобавлено анкет: {added}")
+    await callback.message.answer("Главное меню", reply_markup=get_main_menu(callback.from_user.id))
+    await callback.answer()
 
 
 @router.message(AdminStates.adding_profiles, F.photo)

@@ -36,5 +36,5 @@ async def show_profile(message: Message):
 
 @router.callback_query(F.data == "main_menu")
 async def back_to_main(callback):
-    await callback.message.answer("Главное меню", reply_markup=get_main_menu())
+    await callback.message.answer("Главное меню", reply_markup=get_main_menu(callback.from_user.id))
     await callback.answer()

@@ -1,7 +1,10 @@
+import os
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
-def get_main_menu() -> ReplyKeyboardMarkup:
+ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+
+def get_main_menu(user_id: int = 0) -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.row(
         KeyboardButton(text="🔍 Искать"),
@@ -11,6 +14,10 @@ def get_main_menu() -> ReplyKeyboardMarkup:
         KeyboardButton(text="💑 Матчи"),
         KeyboardButton(text="💌 Чаты")
     )
+    if user_id == ADMIN_USER_ID and ADMIN_USER_ID != 0:
+        builder.row(
+            KeyboardButton(text="📥 Добавить анкеты")
+        )
     return builder.as_markup(resize_keyboard=True)
 
 def get_profile_kb() -> InlineKeyboardMarkup:
