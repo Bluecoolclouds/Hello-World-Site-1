@@ -88,8 +88,12 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def get_random_profile(self, user_id: int, city: str, preferences: str) -> Optional[Dict]:
+    def get_random_profile(self, user_id: int, city: str, preferences: str, min_age: int = None, max_age: int = None) -> Optional[Dict]:
         city = normalize_city(city)
+        
+        current_user = self.get_user(user_id)
+        current_age = current_user['age'] if current_user else 25
+        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             gender_filter = None
@@ -111,17 +115,24 @@ class Database:
                 )
             """
             
-            if gender_filter:
-                cursor = conn.execute(
-                    base_query + " AND gender = ? ORDER BY RANDOM() LIMIT 1",
-                    (user_id, city, user_id, user_id, gender_filter)
-                )
-            else:
-                cursor = conn.execute(
-                    base_query + " ORDER BY RANDOM() LIMIT 1",
-                    (user_id, city, user_id, user_id)
-                )
+            params = [user_id, city, user_id, user_id]
             
+            if min_age is not None:
+                base_query += " AND age >= ?"
+                params.append(min_age)
+            
+            if max_age is not None:
+                base_query += " AND age <= ?"
+                params.append(max_age)
+            
+            if gender_filter:
+                base_query += " AND gender = ?"
+                params.append(gender_filter)
+            
+            base_query += " ORDER BY ABS(age - ?) ASC, RANDOM() LIMIT 1"
+            params.append(current_age)
+            
+            cursor = conn.execute(base_query, params)
             row = cursor.fetchone()
             return dict(row) if row else None
 
