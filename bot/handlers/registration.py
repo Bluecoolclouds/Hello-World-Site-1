@@ -270,8 +270,8 @@ async def process_preferences(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "start_search")
 async def start_search_callback(callback: CallbackQuery):
-    from bot.handlers.search import cmd_search
-    await cmd_search(callback.message)
+    from bot.handlers.search import search_for_user
+    await search_for_user(callback.from_user.id, callback.message)
     await callback.answer()
 
 

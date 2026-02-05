@@ -52,10 +52,8 @@ def check_hourly_limit(user: dict, now: float) -> tuple[bool, str]:
     return True, ""
 
 
-@router.message(Command("search"))
-@router.message(F.text == "🔍 Искать")
-async def cmd_search(message: Message):
-    user_id = message.from_user.id
+async def search_for_user(user_id: int, message: Message):
+    """Поиск анкеты для указанного пользователя"""
     user = db.get_user(user_id)
     
     if not user:
@@ -94,6 +92,12 @@ async def cmd_search(message: Message):
         caption=profile_text,
         reply_markup=kb.as_markup()
     )
+
+
+@router.message(Command("search"))
+@router.message(F.text == "🔍 Искать")
+async def cmd_search(message: Message):
+    await search_for_user(message.from_user.id, message)
 
 
 @router.callback_query(F.data.startswith("like_"))
