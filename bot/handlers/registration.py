@@ -212,22 +212,27 @@ async def process_city(message: Message, state: FSMContext):
     kb = get_cancel_keyboard()
     await message.answer(
         "📝 <b>Создание анкеты</b>\n\n"
-        "Шаг 4/5: Расскажите о себе (минимум 10 символов):",
+        "Шаг 4/5: Расскажите о себе (или отправьте '-' чтобы пропустить):",
         reply_markup=kb.as_markup()
     )
 
 
 @router.message(Registration.bio)
 async def process_bio(message: Message, state: FSMContext):
-    if len(message.text) < 10:
+    bio_text = message.text.strip() if message.text else ""
+    
+    if bio_text and len(bio_text) < 3:
         kb = get_cancel_keyboard()
         await message.answer(
-            "⚠️ Био должно быть не менее 10 символов. Расскажите подробнее:",
+            "⚠️ Био должно быть минимум 3 символа или оставьте пустым (отправьте '-'):",
             reply_markup=kb.as_markup()
         )
         return
     
-    await state.update_data(bio=message.text)
+    if bio_text == "-":
+        bio_text = ""
+    
+    await state.update_data(bio=bio_text if bio_text else "Не указано")
     await state.set_state(Registration.preferences)
     
     kb = get_preferences_keyboard()
