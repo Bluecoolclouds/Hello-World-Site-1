@@ -71,8 +71,9 @@ class Database:
             columns = [col[1] for col in cursor.fetchall()]
             
             if 'last_active' not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN last_active REAL DEFAULT (strftime('%s', 'now'))")
-                conn.execute("UPDATE users SET last_active = strftime('%s', 'now') WHERE last_active IS NULL")
+                conn.execute("ALTER TABLE users ADD COLUMN last_active REAL DEFAULT 0")
+                import time
+                conn.execute("UPDATE users SET last_active = ?", (time.time(),))
                 logger.info("Добавлена колонка last_active")
             
             if 'is_archived' not in columns:

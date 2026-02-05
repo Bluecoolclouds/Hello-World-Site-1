@@ -2,8 +2,35 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { spawn } from "child_process";
 
 const app = express();
+
+// Start the Telegram bot as a subprocess
+const botProcess = spawn("python3", ["run_bot.py"], {
+  stdio: ["ignore", "pipe", "pipe"],
+  detached: false,
+});
+
+botProcess.stdout?.on("data", (data) => {
+  console.log(`[bot] ${data.toString().trim()}`);
+});
+
+botProcess.stderr?.on("data", (data) => {
+  console.error(`[bot] ${data.toString().trim()}`);
+});
+
+botProcess.on("error", (err) => {
+  console.error(`[bot] Failed to start: ${err.message}`);
+});
+
+botProcess.on("exit", (code) => {
+  console.log(`[bot] Process exited with code ${code}`);
+});
+
+process.on("exit", () => {
+  botProcess.kill();
+});
 const httpServer = createServer(app);
 
 declare module "http" {
