@@ -57,30 +57,39 @@ async def process_gift_payment(message: Message):
     db.add_like(from_id, to_id)
 
     to_user = db.get_user(to_id)
-
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={to_id}")
-    )
+    is_fake = to_user.get('is_fake', 0) == 1 if to_user else False
 
     if to_user:
         gender_emoji = "👨" if to_user.get('gender') == 'м' else "👩"
-        await message.answer(
-            f"🎁 Подарок отправлен! Вот контакт:\n\n"
-            f"{gender_emoji} {to_user['age']} лет, {to_user['city']}\n\n"
-            f"Нажмите кнопку ниже, чтобы написать!",
-            reply_markup=kb.as_markup()
-        )
+        bio = to_user.get('bio', '')
+
+        if is_fake:
+            await message.answer(
+                f"🎁 Подарок отправлен! Вот контакт:\n\n"
+                f"{gender_emoji} {to_user['age']} лет, {to_user['city']}\n"
+                f"📝 {bio}"
+            )
+        else:
+            kb = InlineKeyboardBuilder()
+            kb.row(
+                InlineKeyboardButton(text="💬 Написать", url=f"tg://user?id={to_id}")
+            )
+            await message.answer(
+                f"🎁 Подарок отправлен! Вот контакт:\n\n"
+                f"{gender_emoji} {to_user['age']} лет, {to_user['city']}\n\n"
+                f"Нажмите кнопку ниже, чтобы написать!",
+                reply_markup=kb.as_markup()
+            )
     else:
         await message.answer(
-            "🎁 Подарок отправлен! Нажмите кнопку ниже, чтобы написать.",
-            reply_markup=kb.as_markup()
+            "🎁 Подарок отправлен!",
         )
 
-    try:
-        await message.bot.send_message(
-            to_id,
-            "🎁 Вам отправили подарок! Кто-то очень хочет с вами познакомиться.",
-        )
-    except Exception:
-        pass
+    if not is_fake:
+        try:
+            await message.bot.send_message(
+                to_id,
+                "🎁 Вам отправили подарок! Кто-то очень хочет с вами познакомиться.",
+            )
+        except Exception:
+            pass
