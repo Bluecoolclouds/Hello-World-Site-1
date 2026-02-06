@@ -132,6 +132,14 @@ class Database:
                     PRIMARY KEY (user_id, blocked_user_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS skips (
+                    from_user_id INTEGER,
+                    to_user_id INTEGER,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    PRIMARY KEY (from_user_id, to_user_id)
+                )
+            """)
 
     def save_user(self, user_id: int, data: Dict):
         city = normalize_city(data['city'])
@@ -182,6 +190,8 @@ class Database:
         elif preferences == 'ж':
             gender_filter = 'ж'
 
+        week_ago = time.time() - 604800
+
         query = f"""
             SELECT * FROM users 
             WHERE user_id != ? 
@@ -194,8 +204,11 @@ class Database:
             AND user_id NOT IN (
                 SELECT blocked_user_id FROM blocked_users WHERE user_id = ?
             )
+            AND user_id NOT IN (
+                SELECT to_user_id FROM skips WHERE from_user_id = ? AND created_at > ?
+            )
         """
-        params = [user_id, city_value, user_id, user_id]
+        params = [user_id, city_value, user_id, user_id, user_id, week_ago]
 
         if match_looking_for and looking_for:
             query += " AND looking_for = ?"
@@ -244,6 +257,13 @@ class Database:
                     return dict(row)
             
             return None
+
+    def add_skip(self, from_id: int, to_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO skips (from_user_id, to_user_id, created_at) VALUES (?, ?, ?)",
+                (from_id, to_id, time.time())
+            )
 
     def add_like(self, from_id: int, to_id: int) -> bool:
         with sqlite3.connect(self.db_path) as conn:

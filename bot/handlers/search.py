@@ -23,7 +23,7 @@ def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_{profile_user_id}"),
-        InlineKeyboardButton(text="💔 Пропустить", callback_data="skip_profile")
+        InlineKeyboardButton(text="💔 Пропустить", callback_data=f"skip_{profile_user_id}")
     )
     return kb
 
@@ -238,8 +238,11 @@ async def notify_new_like(bot, to_user_id: int, from_user_id: int):
         pass
 
 
-@router.callback_query(F.data == "skip_profile")
+@router.callback_query(F.data.regexp(r"^skip_\d+$"))
 async def handle_skip(callback: CallbackQuery):
+    skipped_id = int(callback.data.split("_")[1])
+    from_id = callback.from_user.id
+    db.add_skip(from_id, skipped_id)
     await callback.answer("⏭ Пропущено")
     await show_next_profile(callback)
 
