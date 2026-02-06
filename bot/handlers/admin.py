@@ -303,6 +303,12 @@ async def cb_add_done(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.adding_profiles, F.photo)
 async def handle_add_photo(message: Message, state: FSMContext):
     caption = message.caption
+    if caption:
+        await state.update_data(last_caption=caption)
+    else:
+        data = await state.get_data()
+        caption = data.get("last_caption")
+
     if not caption:
         await message.answer("❌ Нужна подпись к фото: <code>возраст,город,описание</code>")
         return
@@ -313,6 +319,12 @@ async def handle_add_photo(message: Message, state: FSMContext):
 @router.message(AdminStates.adding_profiles, F.video)
 async def handle_add_video(message: Message, state: FSMContext):
     caption = message.caption
+    if caption:
+        await state.update_data(last_caption=caption)
+    else:
+        data = await state.get_data()
+        caption = data.get("last_caption")
+
     if not caption:
         await message.answer("❌ Нужна подпись к видео: <code>возраст,город,описание</code>")
         return
@@ -323,7 +335,7 @@ async def handle_add_video(message: Message, state: FSMContext):
 @router.message(AdminStates.adding_profiles, F.video_note)
 async def handle_add_video_note(message: Message, state: FSMContext):
     await message.answer(
-        "⚠️ Кружочки (видеосообщения) не поддерживают подписи.\n"
+        "⚠️ Кружочки не поддерживают подписи.\n"
         "Отправьте обычное видео или фото с подписью."
     )
 
@@ -331,9 +343,10 @@ async def handle_add_video_note(message: Message, state: FSMContext):
 @router.message(AdminStates.adding_profiles)
 async def handle_add_text(message: Message, state: FSMContext):
     if message.text and not message.text.startswith("/"):
+        await state.update_data(last_caption=message.text)
         await message.answer(
-            "❌ Нужно отправить <b>фото</b> или <b>видео</b> с подписью.\n"
-            "Формат подписи: <code>возраст,город,описание</code>"
+            f"📝 Запомнил подпись: <code>{message.text}</code>\n"
+            f"Теперь отправляйте фото/видео — каждое станет отдельной анкетой с этими данными."
         )
 
 
