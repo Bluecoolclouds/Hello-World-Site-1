@@ -156,10 +156,16 @@ async def cmd_admin_user(message: Message):
     stats = db.get_user_stats(user['user_id'])
     banned = db.is_banned(user['user_id'])
     
+    name = user.get('name')
+    is_fake = user.get('is_fake', 0)
+    name_line = f"Имя: {name}\n" if name else ""
+    fake_line = "Тип: fake\n" if is_fake else ""
     user_text = (
         f"👤 Информация о пользователе:\n\n"
         f"ID: {user['user_id']}\n"
+        f"{fake_line}"
         f"Username: @{user.get('username', 'нет')}\n"
+        f"{name_line}"
         f"Возраст: {user['age']}\n"
         f"Пол: {user['gender']}\n"
         f"Город: {user['city']}\n"
@@ -263,11 +269,9 @@ async def cmd_admin_add(message: Message, state: FSMContext):
     await message.answer(
         "📥 <b>Режим добавления анкет</b>\n\n"
         "Отправляйте фото или видео с подписью в формате:\n"
-        "<code>возраст,город,описание</code>\n\n"
-        "Примеры:\n"
-        "<code>22,астрахань,Люблю путешествия</code>\n"
-        "<code>19,москва,-</code>\n\n"
-        "Описание <code>-</code> = «Не указано»\n"
+        "<code>имя, возраст, город – описание</code>\n\n"
+        "Пример:\n"
+        "<code>Анастасия, 19, Москва – люблю путешествия</code>\n\n"
         "Пол: 👩 Девушка\n\n"
         "Нажмите кнопку чтобы сменить пол или завершить.",
         reply_markup=kb.as_markup()
@@ -287,7 +291,7 @@ async def cb_add_gender(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"📥 <b>Режим добавления анкет</b>\n\n"
         f"Отправляйте фото или видео с подписью в формате:\n"
-        f"<code>возраст,город,описание</code>\n\n"
+        f"<code>имя, возраст, город – описание</code>\n\n"
         f"Пол: {label}\n\n"
         f"Нажмите кнопку чтобы сменить пол или завершить.",
         reply_markup=callback.message.reply_markup
@@ -331,7 +335,7 @@ async def _handle_media(message: Message, state: FSMContext, media_id: str, medi
     data = await state.get_data()
     cap = caption or data.get("last_caption")
     if not cap:
-        await message.answer("❌ Нужна подпись: <code>возраст,город,описание</code>")
+        await message.answer("❌ Нужна подпись: <code>имя, возраст, город – описание</code>")
         return
 
     media_list = [{"id": media_id, "type": media_type}]
@@ -354,7 +358,7 @@ async def _process_media_group(group_key: str):
         caption = data.get("last_caption")
 
     if not caption:
-        await message.answer("❌ Нужна подпись: <code>возраст,город,описание</code>")
+        await message.answer("❌ Нужна подпись: <code>имя, возраст, город – описание</code>")
         return
 
     await _save_profile(message, state, items, caption)
@@ -389,13 +393,31 @@ async def handle_add_text(message: Message, state: FSMContext):
 
 
 async def _save_profile(message: Message, state: FSMContext, media_list: list, caption: str):
-    parts = caption.split(",", 2)
-    if len(parts) < 2:
-        await message.answer("❌ Неверный формат. Нужно: <code>возраст,город,описание</code>")
+    bio = "Не указано"
+    main_part = caption
+    if " – " in caption:
+        main_part, bio = caption.split(" – ", 1)
+        bio = bio.strip() or "Не указано"
+    elif " - " in caption:
+        main_part, bio = caption.split(" - ", 1)
+        bio = bio.strip() or "Не указано"
+
+    parts = [p.strip() for p in main_part.split(",")]
+    if len(parts) < 3:
+        await message.answer(
+            "❌ Неверный формат. Нужно:\n"
+            "<code>имя, возраст, город – описание</code>\n"
+            "Пример: <code>Анастасия, 19, Москва – текст о себе</code>"
+        )
+        return
+
+    name = parts[0].strip()
+    if not name:
+        await message.answer("❌ Имя не может быть пустым.")
         return
 
     try:
-        age = int(parts[0].strip())
+        age = int(parts[1].strip())
     except ValueError:
         await message.answer("❌ Возраст должен быть числом.")
         return
@@ -404,14 +426,10 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
         await message.answer("❌ Возраст должен быть от 16 до 99.")
         return
 
-    city = parts[1].strip().lower()
+    city = parts[2].strip().lower()
     if not city:
         await message.answer("❌ Город не может быть пустым.")
         return
-
-    bio = parts[2].strip() if len(parts) > 2 else "Не указано"
-    if bio == "-" or not bio:
-        bio = "Не указано"
 
     state_data = await state.get_data()
     gender = state_data.get("gender", "ж")
@@ -430,11 +448,11 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
     now = time.time()
     conn.execute("""
         INSERT OR REPLACE INTO users
-        (user_id, username, age, gender, city, bio, preferences, looking_for,
+        (user_id, username, name, age, gender, city, bio, preferences, looking_for,
          photo_id, media_type, media_ids, is_fake, view_count, last_search_at, search_count_hour,
          last_hour_reset, is_banned, last_active, is_archived, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, 0, 0, ?, 0, ?)
-    """, (fake_id, None, age, gender, city, bio, preferences, '',
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, 0, 0, ?, 0, ?)
+    """, (fake_id, None, name, age, gender, city, bio, preferences, '',
           main_media["id"], main_media["type"], media_ids_json, now, now))
     conn.commit()
     conn.close()
@@ -446,5 +464,5 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
     media_count = len(media_list)
     media_info = f" ({media_count} фото/видео)" if media_count > 1 else ""
     await message.answer(
-        f"✅ #{added} | {gender_label}, {age}, {city}{media_info} | ID: fake_{fake_id}"
+        f"✅ #{added} | {name}, {gender_label}, {age}, {city}{media_info} | ID: fake_{fake_id}"
     )

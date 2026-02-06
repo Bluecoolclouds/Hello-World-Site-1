@@ -102,6 +102,10 @@ class Database:
             if 'is_fake' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN is_fake INTEGER DEFAULT 0")
                 logger.info("Добавлена колонка is_fake")
+
+            if 'name' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
+                logger.info("Добавлена колонка name")
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -133,8 +137,8 @@ class Database:
         city = normalize_city(data['city'])
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO users (user_id, username, age, gender, city, bio, preferences, looking_for, photo_id, media_type, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, last_active, is_archived, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                INSERT OR REPLACE INTO users (user_id, username, name, age, gender, city, bio, preferences, looking_for, photo_id, media_type, view_count, last_search_at, search_count_hour, last_hour_reset, is_banned, last_active, is_archived, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     (SELECT COALESCE(view_count, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(last_search_at, 0) FROM users WHERE user_id = ?),
                     (SELECT COALESCE(search_count_hour, 0) FROM users WHERE user_id = ?),
@@ -144,7 +148,7 @@ class Database:
                     COALESCE((SELECT is_archived FROM users WHERE user_id = ?), 0),
                     COALESCE((SELECT created_at FROM users WHERE user_id = ?), strftime('%s', 'now'))
                 )
-            """, (user_id, data.get('username'), data['age'], data['gender'], city, data['bio'], data['preferences'], data.get('looking_for'), data.get('photo_id'), data.get('media_type'), user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id))
+            """, (user_id, data.get('username'), data.get('name'), data['age'], data['gender'], city, data['bio'], data['preferences'], data.get('looking_for'), data.get('photo_id'), data.get('media_type'), user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id))
 
     def get_user(self, user_id: int) -> Optional[Dict]:
         with sqlite3.connect(self.db_path) as conn:
@@ -154,7 +158,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids'}
+        allowed = {'name', 'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids'}
         if field not in allowed:
             return
         if field == 'city':
