@@ -448,6 +448,27 @@ class Database:
                 'matches_today': matches_today
             }
     
+    def touch_random_fake_users(self) -> int:
+        """Обновить last_active у случайной части fake-профилей"""
+        import random
+        now = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            fakes = conn.execute(
+                "SELECT user_id FROM users WHERE is_fake = 1 AND is_banned = 0 AND is_archived = 0"
+            ).fetchall()
+            if not fakes:
+                return 0
+            count = max(1, len(fakes) // 3)
+            chosen = random.sample(fakes, min(count, len(fakes)))
+            for row in chosen:
+                offset = random.randint(-300, 300)
+                conn.execute(
+                    "UPDATE users SET last_active = ? WHERE user_id = ?",
+                    (now + offset, row['user_id'])
+                )
+            return len(chosen)
+
     def update_last_active(self, user_id: int):
         """Обновить время последней активности пользователя"""
         with sqlite3.connect(self.db_path) as conn:
