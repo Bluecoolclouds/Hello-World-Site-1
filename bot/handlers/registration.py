@@ -1,5 +1,6 @@
+import json
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, ContentType
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, ContentType, InputMediaPhoto, InputMediaVideo
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -119,7 +120,25 @@ def format_profile(user: dict) -> str:
 async def send_profile_with_photo(bot, chat_id: int, user: dict, text: str, reply_markup=None):
     photo_id = user.get('photo_id')
     media_type = user.get('media_type', 'photo')
-    
+    media_ids_raw = user.get('media_ids')
+
+    if media_ids_raw:
+        try:
+            media_list = json.loads(media_ids_raw)
+            group = []
+            for i, item in enumerate(media_list):
+                caption_text = text if i == 0 else None
+                if item["type"] == "video":
+                    group.append(InputMediaVideo(media=item["id"], caption=caption_text, parse_mode="HTML"))
+                else:
+                    group.append(InputMediaPhoto(media=item["id"], caption=caption_text, parse_mode="HTML"))
+            await bot.send_media_group(chat_id=chat_id, media=group)
+            if reply_markup:
+                await bot.send_message(chat_id=chat_id, text="⬆️", reply_markup=reply_markup, parse_mode="HTML")
+            return
+        except Exception:
+            pass
+
     if photo_id:
         try:
             if media_type == 'video':

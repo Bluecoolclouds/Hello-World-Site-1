@@ -1,7 +1,8 @@
 import time
+import json
 import asyncio
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -45,7 +46,25 @@ def format_profile_text(profile: dict) -> str:
 async def send_profile_with_photo(bot, chat_id: int, profile: dict, text: str, reply_markup=None):
     photo_id = profile.get('photo_id')
     media_type = profile.get('media_type', 'photo')
-    
+    media_ids_raw = profile.get('media_ids')
+
+    if media_ids_raw:
+        try:
+            media_list = json.loads(media_ids_raw)
+            group = []
+            for i, item in enumerate(media_list):
+                caption_text = text if i == 0 else None
+                if item["type"] == "video":
+                    group.append(InputMediaVideo(media=item["id"], caption=caption_text))
+                else:
+                    group.append(InputMediaPhoto(media=item["id"], caption=caption_text))
+            await bot.send_media_group(chat_id=chat_id, media=group)
+            if reply_markup:
+                await bot.send_message(chat_id=chat_id, text="⬆️", reply_markup=reply_markup)
+            return
+        except Exception:
+            pass
+
     if photo_id:
         try:
             if media_type == 'video':

@@ -6,10 +6,14 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import os
 import time
+import json
+import asyncio
 import sqlite3
 
 from bot.db import Database
 from bot.keyboards.keyboards import get_main_menu
+
+_media_group_buffers: dict = {}
 
 router = Router()
 db = Database()
@@ -300,52 +304,69 @@ async def cb_add_done(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(AdminStates.adding_profiles, F.photo)
-async def handle_add_photo(message: Message, state: FSMContext):
-    if message.media_group_id:
-        data = await state.get_data()
-        seen = data.get("seen_groups", [])
-        if message.media_group_id in seen:
-            return
-        seen.append(message.media_group_id)
-        await state.update_data(seen_groups=seen)
-
+async def _handle_media(message: Message, state: FSMContext, media_id: str, media_type: str):
     caption = message.caption
     if caption:
         await state.update_data(last_caption=caption)
-    else:
+
+    user_id = message.from_user.id
+
+    if message.media_group_id:
+        group_key = f"{user_id}_{message.media_group_id}"
+        if group_key not in _media_group_buffers:
+            _media_group_buffers[group_key] = {
+                "items": [],
+                "message": message,
+                "state": state,
+            }
+        _media_group_buffers[group_key]["items"].append({"id": media_id, "type": media_type})
+        if caption:
+            _media_group_buffers[group_key]["caption"] = caption
+
+        if len(_media_group_buffers[group_key]["items"]) == 1:
+            asyncio.create_task(_process_media_group(group_key))
+        return
+
+    data = await state.get_data()
+    cap = caption or data.get("last_caption")
+    if not cap:
+        await message.answer("❌ Нужна подпись: <code>возраст,город,описание</code>")
+        return
+
+    media_list = [{"id": media_id, "type": media_type}]
+    await _save_profile(message, state, media_list, cap)
+
+
+async def _process_media_group(group_key: str):
+    await asyncio.sleep(2.0)
+    buf = _media_group_buffers.pop(group_key, None)
+    if not buf:
+        return
+
+    message = buf["message"]
+    state = buf["state"]
+    items = buf["items"]
+
+    caption = buf.get("caption")
+    if not caption:
         data = await state.get_data()
         caption = data.get("last_caption")
 
     if not caption:
-        await message.answer("❌ Нужна подпись к фото: <code>возраст,город,описание</code>")
+        await message.answer("❌ Нужна подпись: <code>возраст,город,описание</code>")
         return
 
-    await _process_media_profile(message, state, message.photo[-1].file_id, "photo", caption)
+    await _save_profile(message, state, items, caption)
+
+
+@router.message(AdminStates.adding_profiles, F.photo)
+async def handle_add_photo(message: Message, state: FSMContext):
+    await _handle_media(message, state, message.photo[-1].file_id, "photo")
 
 
 @router.message(AdminStates.adding_profiles, F.video)
 async def handle_add_video(message: Message, state: FSMContext):
-    if message.media_group_id:
-        data = await state.get_data()
-        seen = data.get("seen_groups", [])
-        if message.media_group_id in seen:
-            return
-        seen.append(message.media_group_id)
-        await state.update_data(seen_groups=seen)
-
-    caption = message.caption
-    if caption:
-        await state.update_data(last_caption=caption)
-    else:
-        data = await state.get_data()
-        caption = data.get("last_caption")
-
-    if not caption:
-        await message.answer("❌ Нужна подпись к видео: <code>возраст,город,описание</code>")
-        return
-
-    await _process_media_profile(message, state, message.video.file_id, "video", caption)
+    await _handle_media(message, state, message.video.file_id, "video")
 
 
 @router.message(AdminStates.adding_profiles, F.video_note)
@@ -362,11 +383,11 @@ async def handle_add_text(message: Message, state: FSMContext):
         await state.update_data(last_caption=message.text)
         await message.answer(
             f"📝 Запомнил подпись: <code>{message.text}</code>\n"
-            f"Теперь отправляйте фото/видео — каждое станет отдельной анкетой с этими данными."
+            f"Теперь отправляйте фото/видео — каждое станет отдельной анкетой."
         )
 
 
-async def _process_media_profile(message: Message, state: FSMContext, media_id: str, media_type: str, caption: str):
+async def _save_profile(message: Message, state: FSMContext, media_list: list, caption: str):
     parts = caption.split(",", 2)
     if len(parts) < 2:
         await message.answer("❌ Неверный формат. Нужно: <code>возраст,город,описание</code>")
@@ -397,6 +418,9 @@ async def _process_media_profile(message: Message, state: FSMContext, media_id: 
 
     preferences = "м" if gender == "ж" else "ж"
 
+    main_media = media_list[0]
+    media_ids_json = json.dumps(media_list) if len(media_list) > 1 else None
+
     conn = sqlite3.connect(db.db_path)
     cursor = conn.execute("SELECT MAX(user_id) FROM users")
     max_id = cursor.fetchone()[0] or 0
@@ -406,11 +430,11 @@ async def _process_media_profile(message: Message, state: FSMContext, media_id: 
     conn.execute("""
         INSERT OR REPLACE INTO users
         (user_id, username, age, gender, city, bio, preferences, looking_for,
-         photo_id, media_type, view_count, last_search_at, search_count_hour,
+         photo_id, media_type, media_ids, view_count, last_search_at, search_count_hour,
          last_hour_reset, is_banned, last_active, is_archived, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
     """, (fake_id, None, age, gender, city, bio, preferences, '',
-          media_id, media_type, now, now))
+          main_media["id"], main_media["type"], media_ids_json, now, now))
     conn.commit()
     conn.close()
 
@@ -418,6 +442,8 @@ async def _process_media_profile(message: Message, state: FSMContext, media_id: 
     await state.update_data(added=added)
 
     gender_label = "Д" if gender == "ж" else "П"
+    media_count = len(media_list)
+    media_info = f" ({media_count} фото/видео)" if media_count > 1 else ""
     await message.answer(
-        f"✅ #{added} | {gender_label}, {age}, {city} | ID: {fake_id}"
+        f"✅ #{added} | {gender_label}, {age}, {city}{media_info} | ID: {fake_id}"
     )

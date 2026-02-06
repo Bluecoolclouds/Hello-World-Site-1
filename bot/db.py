@@ -94,6 +94,10 @@ class Database:
             if 'looking_for' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN looking_for TEXT")
                 logger.info("Добавлена колонка looking_for")
+
+            if 'media_ids' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN media_ids TEXT")
+                logger.info("Добавлена колонка media_ids")
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -146,7 +150,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids'}
         if field not in allowed:
             return
         if field == 'city':
