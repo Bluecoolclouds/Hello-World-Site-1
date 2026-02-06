@@ -104,11 +104,9 @@ async def view_match_profile(callback: CallbackQuery):
     gender_emoji = "👨" if user.get('gender') == 'м' else "👩"
     online_status = format_online_status(user.get('last_active'))
     looking_for_text = format_looking_for(user.get('looking_for', ''))
-    name = user.get('name')
-    name_line = f"{gender_emoji} {name}, {user['age']}" if name else f"{gender_emoji} Возраст: {user['age']}"
     profile_text = (
         f"💕 Профиль матча:\n\n"
-        f"{name_line}\n"
+        f"{gender_emoji} Возраст: {user['age']}\n"
         f"📍 Город: {user['city']}\n"
         f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"
@@ -137,11 +135,9 @@ def format_liker_profile(profile: dict) -> str:
     gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
     online_status = format_online_status(profile.get('last_active'))
     looking_for_text = format_looking_for(profile.get('looking_for', ''))
-    name = profile.get('name')
-    name_line = f"{gender_emoji} {name}, {profile['age']}" if name else f"{gender_emoji} Возраст: {profile['age']}"
     return (
         f"💘 Этот человек вас лайкнул!\n\n"
-        f"{name_line}\n"
+        f"{gender_emoji} Возраст: {profile['age']}\n"
         f"📍 Город: {profile['city']}\n"
         f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"

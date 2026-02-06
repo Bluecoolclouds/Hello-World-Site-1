@@ -34,10 +34,8 @@ def format_profile_text(profile: dict) -> str:
     gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
     online_status = format_online_status(profile.get('last_active'))
     looking_for_text = format_looking_for(profile.get('looking_for', ''))
-    name = profile.get('name')
-    name_line = f"{gender_emoji} {name}, {profile['age']}\n" if name else f"{gender_emoji} Возраст: {profile['age']}\n"
     return (
-        f"{name_line}"
+        f"{gender_emoji} Возраст: {profile['age']}\n"
         f"📍 Город: {profile['city']}\n"
         f"🎯 Я ищу: {looking_for_text}\n"
         f"{online_status}\n\n"

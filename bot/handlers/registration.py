@@ -94,10 +94,7 @@ def format_profile(user: dict) -> str:
     online_status = format_online_status(user.get('last_active'))
     bio = user.get('bio', 'Не указано')
     
-    name = user.get('name')
     lines = [f"👤 <b>Ваша анкета:</b>\n"]
-    if name:
-        lines.append(f"Имя: {name}")
     lines.append(f"1. Возраст: {user['age']}")
     lines.append(f"2. Пол: {gender_text}")
     lines.append(f"3. Город: {user['city']}")
