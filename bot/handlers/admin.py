@@ -302,6 +302,14 @@ async def cb_add_done(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.adding_profiles, F.photo)
 async def handle_add_photo(message: Message, state: FSMContext):
+    if message.media_group_id:
+        data = await state.get_data()
+        seen = data.get("seen_groups", [])
+        if message.media_group_id in seen:
+            return
+        seen.append(message.media_group_id)
+        await state.update_data(seen_groups=seen)
+
     caption = message.caption
     if caption:
         await state.update_data(last_caption=caption)
@@ -318,6 +326,14 @@ async def handle_add_photo(message: Message, state: FSMContext):
 
 @router.message(AdminStates.adding_profiles, F.video)
 async def handle_add_video(message: Message, state: FSMContext):
+    if message.media_group_id:
+        data = await state.get_data()
+        seen = data.get("seen_groups", [])
+        if message.media_group_id in seen:
+            return
+        seen.append(message.media_group_id)
+        await state.update_data(seen_groups=seen)
+
     caption = message.caption
     if caption:
         await state.update_data(last_caption=caption)
