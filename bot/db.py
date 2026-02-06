@@ -140,6 +140,16 @@ class Database:
                     PRIMARY KEY (from_user_id, to_user_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS gifts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    from_user_id INTEGER,
+                    to_user_id INTEGER,
+                    stars_amount INTEGER,
+                    telegram_charge_id TEXT,
+                    created_at REAL DEFAULT (strftime('%s', 'now'))
+                )
+            """)
 
     def save_user(self, user_id: int, data: Dict):
         city = normalize_city(data['city'])
@@ -257,6 +267,20 @@ class Database:
                     return dict(row)
             
             return None
+
+    def save_gift(self, from_id: int, to_id: int, stars_amount: int, telegram_charge_id: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO gifts (from_user_id, to_user_id, stars_amount, telegram_charge_id) VALUES (?, ?, ?, ?)",
+                (from_id, to_id, stars_amount, telegram_charge_id)
+            )
+
+    def get_gifts_stats(self) -> Dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            total = conn.execute("SELECT COUNT(*) as count FROM gifts").fetchone()['count']
+            total_stars = conn.execute("SELECT COALESCE(SUM(stars_amount), 0) as total FROM gifts").fetchone()['total']
+            return {'total_gifts': total, 'total_stars': total_stars}
 
     def add_skip(self, from_id: int, to_id: int):
         with sqlite3.connect(self.db_path) as conn:

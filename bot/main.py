@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from bot.handlers import registration, profile, search, matching, chats, admin
+from bot.handlers import registration, profile, search, matching, chats, admin, gifts
 from bot.db import Database
 from bot.middleware import ActivityMiddleware
 from bot.scheduler import start_scheduler
@@ -55,6 +55,7 @@ async def main():
     dp.include_router(registration.router)
     dp.include_router(profile.router)
     dp.include_router(search.router)
+    dp.include_router(gifts.router)
     dp.include_router(matching.router)
     dp.include_router(chats.router)
 

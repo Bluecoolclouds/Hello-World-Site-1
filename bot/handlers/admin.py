@@ -36,6 +36,7 @@ async def cmd_admin_stats(message: Message):
         return
     
     stats = db.get_global_stats()
+    gift_stats = db.get_gifts_stats()
     
     stats_text = (
         "📊 Статистика бота:\n\n"
@@ -47,7 +48,8 @@ async def cmd_admin_stats(message: Message):
         f"💑 Всего матчей: {stats['total_matches']}\n"
         f"🚫 Забанено: {stats['banned_users']}\n\n"
         f"📈 Лайков сегодня: {stats['likes_today']}\n"
-        f"💕 Матчей сегодня: {stats['matches_today']}"
+        f"💕 Матчей сегодня: {stats['matches_today']}\n\n"
+        f"🎁 Подарков: {gift_stats['total_gifts']} (⭐ {gift_stats['total_stars']} звёзд)"
     )
     
     await message.answer(stats_text)

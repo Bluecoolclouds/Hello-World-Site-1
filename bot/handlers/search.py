@@ -23,6 +23,7 @@ def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_{profile_user_id}"),
+        InlineKeyboardButton(text="🎁 Подарок", callback_data=f"gift_{profile_user_id}"),
         InlineKeyboardButton(text="💔 Пропустить", callback_data=f"skip_{profile_user_id}")
     )
     return kb
