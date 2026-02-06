@@ -98,6 +98,10 @@ class Database:
             if 'media_ids' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN media_ids TEXT")
                 logger.info("Добавлена колонка media_ids")
+
+            if 'is_fake' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_fake INTEGER DEFAULT 0")
+                logger.info("Добавлена колонка is_fake")
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -412,6 +416,7 @@ class Database:
             conn.row_factory = sqlite3.Row
             
             total_users = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
+            fake_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_fake = 1").fetchone()['count']
             banned_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_banned = 1").fetchone()['count']
             archived_users = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_archived = 1").fetchone()['count']
             active_today = conn.execute(
@@ -433,6 +438,7 @@ class Database:
             
             return {
                 'total_users': total_users,
+                'fake_users': fake_users,
                 'banned_users': banned_users,
                 'archived_users': archived_users,
                 'active_today': active_today,

@@ -40,6 +40,7 @@ async def cmd_admin_stats(message: Message):
     stats_text = (
         "📊 Статистика бота:\n\n"
         f"👥 Всего пользователей: {stats['total_users']}\n"
+        f"🤖 Fake-анкет: {stats.get('fake_users', 0)}\n"
         f"👤 Активных за сутки: {stats['active_today']}\n"
         f"📦 В архиве: {stats.get('archived_users', 0)}\n"
         f"❤️ Всего лайков: {stats['total_likes']}\n"
@@ -430,9 +431,9 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
     conn.execute("""
         INSERT OR REPLACE INTO users
         (user_id, username, age, gender, city, bio, preferences, looking_for,
-         photo_id, media_type, media_ids, view_count, last_search_at, search_count_hour,
+         photo_id, media_type, media_ids, is_fake, view_count, last_search_at, search_count_hour,
          last_hour_reset, is_banned, last_active, is_archived, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, 0, 0, ?, 0, ?)
     """, (fake_id, None, age, gender, city, bio, preferences, '',
           main_media["id"], main_media["type"], media_ids_json, now, now))
     conn.commit()
@@ -445,5 +446,5 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
     media_count = len(media_list)
     media_info = f" ({media_count} фото/видео)" if media_count > 1 else ""
     await message.answer(
-        f"✅ #{added} | {gender_label}, {age}, {city}{media_info} | ID: {fake_id}"
+        f"✅ #{added} | {gender_label}, {age}, {city}{media_info} | ID: fake_{fake_id}"
     )
