@@ -29,8 +29,10 @@ def format_looking_for(looking_for: str) -> str:
 
 def get_male_inline_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Мои отслеживаемые", callback_data="my_tracked"))
-    kb.row(InlineKeyboardButton(text="Фильтры", callback_data="open_filters"))
+    kb.row(
+        InlineKeyboardButton(text="Девушки", callback_data="start_search"),
+        InlineKeyboardButton(text="Фильтры", callback_data="open_filters")
+    )
     return kb
 
 
@@ -198,24 +200,24 @@ async def cmd_start(message: Message, state: FSMContext):
                 kb.as_markup()
             )
         else:
-            await message.answer(
-                "<b>Главное меню</b>",
-                reply_markup=get_male_reply_keyboard()
-            )
             kb = get_male_inline_keyboard()
             await message.answer(
-                "Дополнительные опции:",
+                "<b>С возвращением!</b>",
+                reply_markup=get_male_reply_keyboard()
+            )
+            await message.answer(
+                "Выберите действие:",
                 reply_markup=kb.as_markup()
             )
     else:
         db.create_male_user(user_id, message.from_user.username)
-        await message.answer(
-            "<b>Добро пожаловать!</b>\n\nВыберите действие:",
-            reply_markup=get_male_reply_keyboard()
-        )
         kb = get_male_inline_keyboard()
         await message.answer(
-            "Дополнительные опции:",
+            "<b>Добро пожаловать!</b>",
+            reply_markup=get_male_reply_keyboard()
+        )
+        await message.answer(
+            "Выберите действие:",
             reply_markup=kb.as_markup()
         )
 
@@ -228,9 +230,9 @@ async def back_to_main(callback: CallbackQuery, state: FSMContext):
         kb = get_female_menu_keyboard()
         await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
     else:
-        await callback.message.answer("Главное меню", reply_markup=get_male_reply_keyboard())
         kb = get_male_inline_keyboard()
-        await callback.message.answer("Дополнительные опции:", reply_markup=kb.as_markup())
+        await callback.message.answer("Главное меню", reply_markup=get_male_reply_keyboard())
+        await callback.message.answer("Выберите действие:", reply_markup=kb.as_markup())
     await callback.answer()
 
 
@@ -289,6 +291,36 @@ async def reply_my_profile(message: Message, state: FSMContext):
         f"Город: {city}\n"
     )
     kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await message.answer(text, reply_markup=kb.as_markup())
+
+
+@router.message(F.text == "Отслеживаемые")
+async def reply_my_tracked(message: Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+    tracked = db.get_tracked_users(user_id)
+
+    if not tracked:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Листать девушек", callback_data="start_search"))
+        await message.answer(
+            "У вас пока нет отслеживаемых.\n\n"
+            "Нажмите на анкете кнопку для отслеживания.",
+            reply_markup=kb.as_markup()
+        )
+        return
+
+    text = f"<b>Мои отслеживаемые ({len(tracked)}):</b>\n\n"
+    kb = InlineKeyboardBuilder()
+    for i, t in enumerate(tracked[:15], 1):
+        name = t.get('name') or f"{t['age']} лет, {t['city']}"
+        online = format_online_status(t.get('last_active'))
+        kb.row(InlineKeyboardButton(
+            text=f"{name} | {online}",
+            callback_data=f"view_tracked_{t['tracked_user_id']}"
+        ))
+
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     await message.answer(text, reply_markup=kb.as_markup())
 

@@ -28,7 +28,10 @@ def get_male_reply_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="Профиль")
     )
     builder.row(
-        KeyboardButton(text="Чаты"),
+        KeyboardButton(text="Отслеживаемые"),
+        KeyboardButton(text="Чаты")
+    )
+    builder.row(
         KeyboardButton(text="Помощь")
     )
     return builder.as_markup(resize_keyboard=True)
