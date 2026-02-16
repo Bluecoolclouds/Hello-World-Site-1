@@ -16,14 +16,10 @@ db = Database()
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 
 PRICE_FIELDS = {
-    'apt_day_1h': 'Апартаменты днём 1 час',
-    'apt_day_2h': 'Апартаменты днём 2 часа',
-    'apt_night_1h': 'Апартаменты ночью 1 час',
-    'apt_night': 'Апартаменты ночь',
-    'out_day_1h': 'Выезд днём 1 час',
-    'out_day_2h': 'Выезд днём 2 часа',
-    'out_night_1h': 'Выезд ночью 1 час',
-    'out_night': 'Выезд ночь',
+    'home_1h': 'У меня 1 час',
+    'home_2h': 'У меня 2 часа',
+    'out_1h': 'Выезд 1 час',
+    'out_2h': 'Выезд 2 часа',
     'contacts_hour': 'Контактов в час',
     'prepay': 'Предоплата',
 }
@@ -47,17 +43,11 @@ def format_price_table(prices: dict, for_pre: bool = False) -> str:
         return str(v) if v else '-'
 
     lines = []
-    if for_pre:
-        lines.append("         Днём          Ночью")
-        lines.append("       Час   2часа   Час   Ночь")
-    else:
+    if not for_pre:
         lines.append("<b>Цены:</b>")
-        lines.append("         Днём          Ночью")
-        lines.append("       Час   2часа   Час   Ночь")
-
-    lines.append(f"Апарт. {val('apt_day_1h'):>6} {val('apt_day_2h'):>6} {val('apt_night_1h'):>6} {val('apt_night'):>6}")
-    lines.append(f"Выезд  {val('out_day_1h'):>6} {val('out_day_2h'):>6} {val('out_night_1h'):>6} {val('out_night'):>6}")
-
+    lines.append(f"         {'1 час':>8} {'2 часа':>8}")
+    lines.append(f"У меня  {val('home_1h'):>8} {val('home_2h'):>8}")
+    lines.append(f"Выезд   {val('out_1h'):>8} {val('out_2h'):>8}")
     lines.append(f"\nКонтактов в час: {val('contacts_hour')}")
     lines.append(f"Предоплата: {val('prepay')}")
 
@@ -72,12 +62,10 @@ def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
         display = str(v) if v else '-'
         return InlineKeyboardButton(text=f"{label}: {display}", callback_data=f"price_set_{key}")
 
-    kb.row(InlineKeyboardButton(text="--- Днём ---", callback_data="price_noop"))
-    kb.row(btn('apt_day_1h', 'Апарт. 1ч'), btn('apt_day_2h', 'Апарт. 2ч'))
-    kb.row(btn('out_day_1h', 'Выезд 1ч'), btn('out_day_2h', 'Выезд 2ч'))
-    kb.row(InlineKeyboardButton(text="--- Ночью ---", callback_data="price_noop"))
-    kb.row(btn('apt_night_1h', 'Апарт. 1ч'), btn('apt_night', 'Апарт. ночь'))
-    kb.row(btn('out_night_1h', 'Выезд 1ч'), btn('out_night', 'Выезд ночь'))
+    kb.row(InlineKeyboardButton(text="--- У меня ---", callback_data="price_noop"))
+    kb.row(btn('home_1h', '1 час'), btn('home_2h', '2 часа'))
+    kb.row(InlineKeyboardButton(text="--- Выезд ---", callback_data="price_noop"))
+    kb.row(btn('out_1h', '1 час'), btn('out_2h', '2 часа'))
     kb.row(InlineKeyboardButton(text="--- Прочее ---", callback_data="price_noop"))
     kb.row(btn('contacts_hour', 'Контактов/час'), btn('prepay', 'Предоплата'))
     kb.row(InlineKeyboardButton(text="Готово", callback_data="price_done"))
