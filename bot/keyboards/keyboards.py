@@ -20,6 +20,19 @@ def get_main_menu(user_id: int = 0) -> ReplyKeyboardMarkup:
         )
     return builder.as_markup(resize_keyboard=True)
 
+
+def get_male_reply_keyboard() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.row(
+        KeyboardButton(text="Девушки"),
+        KeyboardButton(text="Профиль")
+    )
+    builder.row(
+        KeyboardButton(text="Чаты"),
+        KeyboardButton(text="Помощь")
+    )
+    return builder.as_markup(resize_keyboard=True)
+
 def get_profile_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(

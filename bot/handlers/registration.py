@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.states.states import Registration, EditProfile, FilterState, CommentState
-from bot.keyboards.keyboards import get_main_menu
+from bot.keyboards.keyboards import get_main_menu, get_male_reply_keyboard
 from bot.db import Database, format_online_status
 
 router = Router()
@@ -27,14 +27,10 @@ def format_looking_for(looking_for: str) -> str:
     return LOOKING_FOR_OPTIONS.get(looking_for, 'Не указано')
 
 
-def get_male_menu_keyboard() -> InlineKeyboardBuilder:
+def get_male_inline_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Листать девушек", callback_data="start_search"))
     kb.row(InlineKeyboardButton(text="Мои отслеживаемые", callback_data="my_tracked"))
     kb.row(InlineKeyboardButton(text="Фильтры", callback_data="open_filters"))
-    kb.row(InlineKeyboardButton(text="Чаты / сообщения", callback_data="open_chats"))
-    kb.row(InlineKeyboardButton(text="Профиль", callback_data="my_profile_male"))
-    kb.row(InlineKeyboardButton(text="Помощь / правила", callback_data="show_help"))
     return kb
 
 
@@ -202,16 +198,24 @@ async def cmd_start(message: Message, state: FSMContext):
                 kb.as_markup()
             )
         else:
-            kb = get_male_menu_keyboard()
             await message.answer(
                 "<b>Главное меню</b>",
+                reply_markup=get_male_reply_keyboard()
+            )
+            kb = get_male_inline_keyboard()
+            await message.answer(
+                "Дополнительные опции:",
                 reply_markup=kb.as_markup()
             )
     else:
         db.create_male_user(user_id, message.from_user.username)
-        kb = get_male_menu_keyboard()
         await message.answer(
             "<b>Добро пожаловать!</b>\n\nВыберите действие:",
+            reply_markup=get_male_reply_keyboard()
+        )
+        kb = get_male_inline_keyboard()
+        await message.answer(
+            "Дополнительные опции:",
             reply_markup=kb.as_markup()
         )
 
@@ -224,9 +228,88 @@ async def back_to_main(callback: CallbackQuery, state: FSMContext):
         kb = get_female_menu_keyboard()
         await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
     else:
-        kb = get_male_menu_keyboard()
-        await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
+        await callback.message.answer("Главное меню", reply_markup=get_male_reply_keyboard())
+        kb = get_male_inline_keyboard()
+        await callback.message.answer("Дополнительные опции:", reply_markup=kb.as_markup())
     await callback.answer()
+
+
+@router.message(F.text == "Девушки")
+async def reply_browse_girls(message: Message, state: FSMContext):
+    await state.clear()
+    user = db.get_user(message.from_user.id)
+    if not user:
+        return
+    from bot.handlers.search import show_next_profile_for_message
+    await show_next_profile_for_message(message, user)
+
+
+@router.message(F.text == "Чаты")
+async def reply_open_chats(message: Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+    user = db.get_user(user_id)
+    if not user:
+        return
+
+    matches = db.get_user_matches(user_id)
+    if not matches:
+        await message.answer(
+            "У вас пока нет чатов.\n"
+            "Чтобы начать общение, найдите кого-то и получите взаимный лайк!"
+        )
+        return
+
+    active_matches = [m for m in matches if not db.is_blocked(user_id, m['matched_user_id'])]
+    if not active_matches:
+        await message.answer("Все ваши чаты заблокированы или удалены.")
+        return
+
+    from bot.handlers.chats import get_chats_list_keyboard
+    chats_text = f"<b>Ваши чаты ({len(active_matches)}):</b>\n\nВыберите чат:"
+    keyboard = get_chats_list_keyboard(active_matches)
+    await message.answer(chats_text, reply_markup=keyboard.as_markup())
+
+
+@router.message(F.text == "Профиль")
+async def reply_my_profile(message: Message, state: FSMContext):
+    await state.clear()
+    user = db.get_user(message.from_user.id)
+    if not user:
+        return
+
+    username = user.get('username', 'Не указан')
+    age = user.get('age', 25)
+    city = user.get('city', 'астрахань')
+
+    text = (
+        f"<b>Ваш профиль</b>\n\n"
+        f"Ник: @{username}\n"
+        f"Возраст: {age}\n"
+        f"Город: {city}\n"
+    )
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await message.answer(text, reply_markup=kb.as_markup())
+
+
+@router.message(F.text == "Помощь")
+async def reply_show_help(message: Message, state: FSMContext):
+    await state.clear()
+    help_text = (
+        "<b>Помощь / правила</b>\n\n"
+        "1. Листайте анкеты девушек\n"
+        "2. Ставьте лайки или отправляйте подарки\n"
+        "3. Если девушка ответит взаимностью - будет матч\n"
+        "4. Отслеживайте понравившихся девушек\n"
+        "5. Оставляйте отзывы на анкетах\n\n"
+        "Команды:\n"
+        "/start - Главное меню\n"
+        "/search - Искать анкеты\n"
+        "/chats - Мои чаты\n"
+        "/matches - Мои матчи\n"
+    )
+    await message.answer(help_text)
 
 
 @router.callback_query(F.data == "show_help")

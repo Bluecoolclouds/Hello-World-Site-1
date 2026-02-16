@@ -337,6 +337,45 @@ async def show_next_profile(callback: CallbackQuery):
     await send_profile_with_photo(callback.bot, user_id, profile, profile_text, kb.as_markup())
 
 
+async def show_next_profile_for_message(message: Message, user: dict):
+    user_id = message.from_user.id
+    now = time.time()
+
+    can_search, error_msg = check_cooldown(user, now)
+    if not can_search:
+        remaining = int(COOLDOWN_SECONDS - (now - (user.get('last_search_at') or 0)))
+        wait_msg = await message.answer(error_msg)
+        await asyncio.sleep(max(remaining, 1))
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
+        user = db.get_user(user_id)
+        now = time.time()
+
+    can_search, error_msg = check_hourly_limit(user, now)
+    if not can_search:
+        await message.answer(error_msg)
+        return
+
+    min_age = user.get('filter_min_age')
+    max_age = user.get('filter_max_age')
+    profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
+
+    if not profile:
+        await message.answer("Анкеты закончились! Возвращайтесь позже.")
+        return
+
+    db.update_search_stats(user_id, now)
+    db.increment_view_count(profile['user_id'])
+
+    profile_text = format_profile_text(profile)
+    is_tracked = db.is_tracking(user_id, profile['user_id'])
+    kb = get_search_keyboard(profile['user_id'], is_tracked)
+
+    await send_profile_with_photo(message.bot, user_id, profile, profile_text, kb.as_markup())
+
+
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
     user_id = message.from_user.id
