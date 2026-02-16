@@ -134,14 +134,44 @@ def format_profile(user: dict) -> str:
     online_status = format_online_status(user.get('last_active'))
     bio = user.get('bio', 'Не указано')
     name = user.get('name', '')
+    is_girl = user.get('is_girl', 0)
 
     lines = []
     if name:
         lines.append(f"<b>{name}</b>\n")
     lines.append(f"<b>Анкета:</b>\n")
-    lines.append(f"Возраст: {user['age']}")
-    lines.append(f"Пол: {gender_text}")
+
+    phone = user.get('phone', '')
+    if phone and is_girl:
+        lines.append(f"Телефон: {phone}")
+
     lines.append(f"Город: {user['city']}")
+    lines.append(f"Возраст: {user['age']}")
+
+    if is_girl:
+        breast = user.get('breast', '')
+        if breast:
+            lines.append(f"Грудь: {breast}")
+        height = user.get('height')
+        if height:
+            lines.append(f"Рост: {height}")
+        weight = user.get('weight')
+        if weight:
+            lines.append(f"Вес: {weight}")
+        clothing_size = user.get('clothing_size', '')
+        if clothing_size:
+            lines.append(f"Размер одежды: {clothing_size}")
+        shoe_size = user.get('shoe_size', '')
+        if shoe_size:
+            lines.append(f"Размер обуви: {shoe_size}")
+        intimate_grooming = user.get('intimate_grooming', '')
+        if intimate_grooming:
+            lines.append(f"Интимная стрижка: {intimate_grooming}")
+        min_age = user.get('min_age_restriction')
+        if min_age:
+            lines.append(f"Не моложе: {min_age} лет")
+    else:
+        lines.append(f"Пол: {gender_text}")
 
     if bio and bio != "Не указано" and bio != "":
         lines.append(f"О себе: {bio}")
@@ -876,32 +906,54 @@ async def show_profile_callback(callback: CallbackQuery):
     await callback.answer()
 
 
+def get_girl_edit_profile_keyboard(user: dict) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+
+    def field_btn(label, field, callback_data):
+        val = user.get(field, '') or '-'
+        return InlineKeyboardButton(text=f"{label}: {val}", callback_data=callback_data)
+
+    kb.row(field_btn("Город", "city", "edit_city"))
+    kb.row(field_btn("Возраст", "age", "edit_age"))
+    kb.row(field_btn("Грудь", "breast", "edit_breast"))
+    kb.row(field_btn("Рост", "height", "edit_height"), field_btn("Вес", "weight", "edit_weight"))
+    kb.row(field_btn("Размер одежды", "clothing_size", "edit_clothing_size"))
+    kb.row(field_btn("Размер обуви", "shoe_size", "edit_shoe_size"))
+    kb.row(field_btn("Интимная стрижка", "intimate_grooming", "edit_intimate_grooming"))
+    min_age = user.get('min_age_restriction', 18) or 18
+    kb.row(InlineKeyboardButton(text=f"Не моложе: {min_age} лет", callback_data="edit_min_age_restriction"))
+    kb.row(InlineKeyboardButton(text="Имя", callback_data="edit_name"))
+    kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
+    phone = user.get('phone', '') or '-'
+    kb.row(InlineKeyboardButton(text=f"Телефон: {phone}", callback_data="edit_phone"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    return kb
+
+
 @router.callback_query(F.data == "edit_profile")
 async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(callback.from_user.id)
     is_girl = user.get('is_girl', 0) if user else 0
 
-    kb = InlineKeyboardBuilder()
     if is_girl:
-        kb.row(InlineKeyboardButton(text="Имя", callback_data="edit_name"))
-        kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
-        kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
-        kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
-        kb.row(InlineKeyboardButton(text="Фото/видео", callback_data="edit_photo"))
+        kb = get_girl_edit_profile_keyboard(user)
+        await callback.message.answer(
+            "<b>Редактировать профиль</b>\n\nНажмите на поле, чтобы изменить:",
+            reply_markup=kb.as_markup()
+        )
     else:
+        kb = InlineKeyboardBuilder()
         kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
         kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
         kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
         kb.row(InlineKeyboardButton(text="Кого показывать", callback_data="edit_pref"))
         kb.row(InlineKeyboardButton(text="Я ищу", callback_data="edit_looking_for"))
         kb.row(InlineKeyboardButton(text="Фото/видео", callback_data="edit_photo"))
-
-    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
-
-    await callback.message.answer(
-        "<b>Что хотите изменить?</b>",
-        reply_markup=kb.as_markup()
-    )
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            "<b>Что хотите изменить?</b>",
+            reply_markup=kb.as_markup()
+        )
     await callback.answer()
 
 
@@ -1292,6 +1344,183 @@ async def process_edit_bio(message: Message, state: FSMContext):
     await show_updated_profile(message.bot, message.from_user.id)
 
 
+@router.callback_query(F.data == "edit_phone")
+async def edit_phone_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.phone)
+    await callback.message.answer("Введите номер телефона (например: +7 967 015-32-67) и часы работы:\n\nИли '-' чтобы убрать")
+    await callback.answer()
+
+
+@router.message(EditProfile.phone)
+async def process_edit_phone(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if text == "-":
+        text = ""
+    if text and len(text) > 100:
+        await message.answer("Слишком длинный текст. Максимум 100 символов:")
+        return
+    db.update_user_field(message.from_user.id, 'phone', text)
+    await state.clear()
+    await message.answer("Телефон обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_breast")
+async def edit_breast_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.breast)
+    await callback.message.answer("Введите размер груди (например: 3):")
+    await callback.answer()
+
+
+@router.message(EditProfile.breast)
+async def process_edit_breast(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if not text or len(text) > 20:
+        await message.answer("Введите корректное значение:")
+        return
+    db.update_user_field(message.from_user.id, 'breast', text)
+    await state.clear()
+    await message.answer("Размер груди обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_height")
+async def edit_height_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.height)
+    await callback.message.answer("Введите рост в см (например: 175):")
+    await callback.answer()
+
+
+@router.message(EditProfile.height)
+async def process_edit_height(message: Message, state: FSMContext):
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("Введите число (рост в см):")
+        return
+    val = int(message.text.strip())
+    if not (100 <= val <= 250):
+        await message.answer("Введите корректный рост (100-250 см):")
+        return
+    db.update_user_field(message.from_user.id, 'height', val)
+    await state.clear()
+    await message.answer("Рост обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_weight")
+async def edit_weight_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.weight)
+    await callback.message.answer("Введите вес в кг (например: 58):")
+    await callback.answer()
+
+
+@router.message(EditProfile.weight)
+async def process_edit_weight(message: Message, state: FSMContext):
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("Введите число (вес в кг):")
+        return
+    val = int(message.text.strip())
+    if not (30 <= val <= 200):
+        await message.answer("Введите корректный вес (30-200 кг):")
+        return
+    db.update_user_field(message.from_user.id, 'weight', val)
+    await state.clear()
+    await message.answer("Вес обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_clothing_size")
+async def edit_clothing_size_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.clothing_size)
+    await callback.message.answer("Введите размер одежды (например: 42):")
+    await callback.answer()
+
+
+@router.message(EditProfile.clothing_size)
+async def process_edit_clothing_size(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if not text or len(text) > 20:
+        await message.answer("Введите корректное значение:")
+        return
+    db.update_user_field(message.from_user.id, 'clothing_size', text)
+    await state.clear()
+    await message.answer("Размер одежды обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_shoe_size")
+async def edit_shoe_size_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.shoe_size)
+    await callback.message.answer("Введите размер обуви (например: 37):")
+    await callback.answer()
+
+
+@router.message(EditProfile.shoe_size)
+async def process_edit_shoe_size(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if not text or len(text) > 20:
+        await message.answer("Введите корректное значение:")
+        return
+    db.update_user_field(message.from_user.id, 'shoe_size', text)
+    await state.clear()
+    await message.answer("Размер обуви обновлен!")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+@router.callback_query(F.data == "edit_intimate_grooming")
+async def edit_intimate_grooming_callback(callback: CallbackQuery, state: FSMContext):
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Полная депиляция", callback_data="grooming_Полная депиляция"))
+    kb.row(InlineKeyboardButton(text="Частичная депиляция", callback_data="grooming_Частичная депиляция"))
+    kb.row(InlineKeyboardButton(text="Натуральная", callback_data="grooming_Натуральная"))
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="edit_profile"))
+    await callback.message.answer("Выберите вариант:", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("grooming_"))
+async def process_grooming(callback: CallbackQuery, state: FSMContext):
+    value = callback.data.replace("grooming_", "")
+    db.update_user_field(callback.from_user.id, 'intimate_grooming', value)
+    await callback.message.answer("Интимная стрижка обновлена!")
+    await show_girl_edit_profile(callback.bot, callback.from_user.id)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_min_age_restriction")
+async def edit_min_age_restriction_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.min_age_restriction)
+    await callback.message.answer("Введите минимальный возраст клиентов (например: 18):")
+    await callback.answer()
+
+
+@router.message(EditProfile.min_age_restriction)
+async def process_edit_min_age_restriction(message: Message, state: FSMContext):
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("Введите число:")
+        return
+    val = int(message.text.strip())
+    if not (18 <= val <= 99):
+        await message.answer("Введите возраст от 18 до 99:")
+        return
+    db.update_user_field(message.from_user.id, 'min_age_restriction', val)
+    await state.clear()
+    await message.answer(f"Ограничение обновлено: не моложе {val} лет")
+    await show_girl_edit_profile(message.bot, message.from_user.id)
+
+
+async def show_girl_edit_profile(bot, user_id: int):
+    user = db.get_user(user_id)
+    if not user:
+        return
+    kb = get_girl_edit_profile_keyboard(user)
+    await bot.send_message(
+        user_id,
+        "<b>Редактировать профиль</b>\n\nНажмите на поле, чтобы изменить:",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+
 @router.callback_query(F.data == "edit_pref")
 async def edit_pref_callback(callback: CallbackQuery, state: FSMContext):
     await state.update_data(editing_field='preferences')
@@ -1412,9 +1641,7 @@ async def show_updated_profile(bot, user_id: int):
         return
 
     if user.get('is_girl'):
-        profile_text = format_profile(user)
-        kb = get_female_menu_keyboard()
-        await send_profile_with_photo(bot, user_id, user, profile_text, kb.as_markup())
+        await show_girl_edit_profile(bot, user_id)
     else:
         kb = get_male_menu_keyboard()
         await bot.send_message(user_id, "Главное меню", reply_markup=kb.as_markup())

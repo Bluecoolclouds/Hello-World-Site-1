@@ -135,6 +135,38 @@ class Database:
                 conn.execute("ALTER TABLE users ADD COLUMN is_online INTEGER DEFAULT 0")
                 logger.info("Добавлена колонка is_online")
 
+            if 'phone' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+                logger.info("Добавлена колонка phone")
+
+            if 'breast' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN breast TEXT")
+                logger.info("Добавлена колонка breast")
+
+            if 'height' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN height INTEGER")
+                logger.info("Добавлена колонка height")
+
+            if 'weight' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN weight INTEGER")
+                logger.info("Добавлена колонка weight")
+
+            if 'clothing_size' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN clothing_size TEXT")
+                logger.info("Добавлена колонка clothing_size")
+
+            if 'shoe_size' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN shoe_size TEXT")
+                logger.info("Добавлена колонка shoe_size")
+
+            if 'intimate_grooming' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN intimate_grooming TEXT")
+                logger.info("Добавлена колонка intimate_grooming")
+
+            if 'min_age_restriction' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN min_age_restriction INTEGER DEFAULT 18")
+                logger.info("Добавлена колонка min_age_restriction")
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS likes (
@@ -272,7 +304,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
         if field not in allowed:
             return
         if field == 'city':

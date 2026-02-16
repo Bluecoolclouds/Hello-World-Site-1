@@ -18,6 +18,14 @@ class EditProfile(StatesGroup):
     services = State()
     prices = State()
     schedule = State()
+    phone = State()
+    breast = State()
+    height = State()
+    weight = State()
+    clothing_size = State()
+    shoe_size = State()
+    intimate_grooming = State()
+    min_age_restriction = State()
 
 
 class FilterState(StatesGroup):
