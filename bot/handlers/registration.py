@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.states.states import Registration, EditProfile, FilterState, CommentState
+from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration
 from bot.keyboards.keyboards import get_main_menu, get_male_reply_keyboard
 from bot.db import Database, format_online_status
 
@@ -210,16 +210,23 @@ async def cmd_start(message: Message, state: FSMContext):
                 reply_markup=kb.as_markup()
             )
     else:
-        db.create_male_user(user_id, message.from_user.username)
-        kb = get_male_inline_keyboard()
-        await message.answer(
-            "<b>Добро пожаловать!</b>",
-            reply_markup=get_male_reply_keyboard()
-        )
-        await message.answer(
-            "Выберите действие:",
-            reply_markup=kb.as_markup()
-        )
+        if db.is_girl_whitelisted(user_id):
+            await state.set_state(GirlRegistration.name)
+            await message.answer(
+                "<b>Создание анкеты</b>\n\n"
+                "Введите ваше имя:"
+            )
+        else:
+            db.create_male_user(user_id, message.from_user.username)
+            kb = get_male_inline_keyboard()
+            await message.answer(
+                "<b>Добро пожаловать!</b>",
+                reply_markup=get_male_reply_keyboard()
+            )
+            await message.answer(
+                "Выберите действие:",
+                reply_markup=kb.as_markup()
+            )
 
 
 @router.callback_query(F.data == "back_to_main")
@@ -342,6 +349,86 @@ async def reply_show_help(message: Message, state: FSMContext):
         "/matches - Мои матчи\n"
     )
     await message.answer(help_text)
+
+
+@router.message(GirlRegistration.name)
+async def girl_reg_name(message: Message, state: FSMContext):
+    name = message.text.strip() if message.text else ""
+    if not name or len(name) < 2:
+        await message.answer("Введите корректное имя (минимум 2 символа):")
+        return
+    await state.update_data(name=name)
+    await state.set_state(GirlRegistration.age)
+    await message.answer("Сколько вам лет?")
+
+
+@router.message(GirlRegistration.age)
+async def girl_reg_age(message: Message, state: FSMContext):
+    try:
+        age = int(message.text.strip())
+    except (ValueError, AttributeError):
+        await message.answer("Введите возраст числом:")
+        return
+    if age < 16 or age > 99:
+        await message.answer("Возраст должен быть от 16 до 99:")
+        return
+    await state.update_data(age=age)
+    await state.set_state(GirlRegistration.city)
+    await message.answer("Ваш город:")
+
+
+@router.message(GirlRegistration.city)
+async def girl_reg_city(message: Message, state: FSMContext):
+    city = message.text.strip().lower() if message.text else ""
+    if not city:
+        await message.answer("Введите название города:")
+        return
+    await state.update_data(city=city)
+    await state.set_state(GirlRegistration.bio)
+    await message.answer("Напишите немного о себе (или отправьте '-' чтобы пропустить):")
+
+
+@router.message(GirlRegistration.bio)
+async def girl_reg_bio(message: Message, state: FSMContext):
+    bio = message.text.strip() if message.text else ""
+    if bio == "-":
+        bio = ""
+    await state.update_data(bio=bio)
+    await state.set_state(GirlRegistration.photo)
+    await message.answer("Отправьте своё фото:")
+
+
+@router.message(GirlRegistration.photo, F.photo)
+async def girl_reg_photo(message: Message, state: FSMContext):
+    photo_id = message.photo[-1].file_id
+    data = await state.get_data()
+    user_id = message.from_user.id
+
+    db.create_girl_user(
+        user_id=user_id,
+        username=message.from_user.username,
+        name=data['name'],
+        age=data['age'],
+        city=data['city'],
+        bio=data.get('bio', ''),
+        photo_id=photo_id,
+        media_type='photo'
+    )
+    db.remove_girl_whitelist(user_id)
+    await state.clear()
+
+    user = db.get_user(user_id)
+    profile_text = format_profile(user)
+    kb = get_female_menu_keyboard()
+    await message.answer(
+        f"Анкета создана!\n\n{profile_text}",
+        reply_markup=kb.as_markup()
+    )
+
+
+@router.message(GirlRegistration.photo)
+async def girl_reg_photo_invalid(message: Message, state: FSMContext):
+    await message.answer("Пожалуйста, отправьте фото:")
 
 
 @router.callback_query(F.data == "show_help")

@@ -27,3 +27,11 @@ class FilterState(StatesGroup):
 
 class CommentState(StatesGroup):
     text = State()
+
+
+class GirlRegistration(StatesGroup):
+    name = State()
+    age = State()
+    city = State()
+    bio = State()
+    photo = State()

@@ -195,6 +195,36 @@ class Database:
                     PRIMARY KEY (user_id, tracked_user_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS girl_whitelist (
+                    user_id INTEGER PRIMARY KEY,
+                    added_at REAL DEFAULT (strftime('%s', 'now'))
+                )
+            """)
+
+    def add_girl_whitelist(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("INSERT OR IGNORE INTO girl_whitelist (user_id) VALUES (?)", (user_id,))
+
+    def is_girl_whitelisted(self, user_id: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT 1 FROM girl_whitelist WHERE user_id = ?", (user_id,)).fetchone()
+            return row is not None
+
+    def remove_girl_whitelist(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM girl_whitelist WHERE user_id = ?", (user_id,))
+
+    def create_girl_user(self, user_id: int, username: str, name: str, age: int, city: str, bio: str, photo_id: str = None, media_type: str = None):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO users
+                (user_id, username, age, gender, city, bio, preferences, looking_for,
+                 photo_id, media_type, is_fake, is_girl, view_count, last_search_at, search_count_hour,
+                 last_hour_reset, is_banned, last_active, is_archived, created_at, name)
+                VALUES (?, ?, ?, 'ж', ?, ?, 'м', '', ?, ?, 0, 1, 0, 0, 0, 0, 0,
+                        strftime('%s', 'now'), 0, strftime('%s', 'now'), ?)
+            """, (user_id, username, age, city, bio, photo_id, media_type, name))
 
     def create_male_user(self, user_id: int, username: str = None):
         with sqlite3.connect(self.db_path) as conn:

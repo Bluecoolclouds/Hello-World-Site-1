@@ -246,71 +246,41 @@ async def cmd_admin_archive_stats(message: Message):
     await message.answer(stats_text)
 
 
-@router.message(Command("admin_assign"))
-async def cmd_admin_assign(message: Message):
+@router.message(Command("admin_girl"))
+async def cmd_admin_girl(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Доступ запрещён.")
         return
 
     args = message.text.split()
-    if len(args) < 3:
+    if len(args) < 2:
         await message.answer(
-            "<b>Привязка анкеты к реальной девушке</b>\n\n"
+            "<b>Выдать доступ девушке</b>\n\n"
             "Использование:\n"
-            "<code>/admin_assign ID_анкеты TG_ID_девушки</code>\n\n"
+            "<code>/admin_girl TG_ID</code>\n\n"
             "Пример:\n"
-            "<code>/admin_assign 9000000001 123456789</code>\n\n"
-            "ID анкеты — показывается при добавлении (fake_XXXXX)\n"
-            "TG ID девушки — её Telegram ID (можно узнать через @userinfobot)"
+            "<code>/admin_girl 123456789</code>\n\n"
+            "После этого девушка пишет боту /start и сама создаёт свою анкету.\n"
+            "TG ID можно узнать через @userinfobot"
         )
         return
 
     try:
-        fake_id = int(args[1])
-        real_id = int(args[2])
+        girl_id = int(args[1])
     except ValueError:
-        await message.answer("Оба параметра должны быть числами.")
+        await message.answer("ID должен быть числом.")
         return
 
-    fake_profile = db.get_user(fake_id)
-    if not fake_profile:
-        await message.answer(f"Анкета с ID {fake_id} не найдена.")
+    existing = db.get_user(girl_id)
+    if existing and existing.get('is_girl'):
+        await message.answer(f"Пользователь {girl_id} уже зарегистрирован как девушка.")
         return
 
-    if not fake_profile.get('is_girl'):
-        await message.answer("Эта анкета не помечена как девушка.")
-        return
-
-    existing = db.get_user(real_id)
-    if existing:
-        await message.answer(
-            f"Пользователь с TG ID {real_id} уже есть в базе.\n"
-            "Сначала удалите его старый профиль или используйте другой ID."
-        )
-        return
-
-    conn = sqlite3.connect(db.db_path)
-    try:
-        conn.execute("UPDATE users SET user_id = ?, is_fake = 0 WHERE user_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE likes SET user_id = ? WHERE user_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE likes SET target_id = ? WHERE target_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE matches SET user1_id = ? WHERE user1_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE matches SET user2_id = ? WHERE user2_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE tracking SET tracked_user_id = ? WHERE tracked_user_id = ?", (real_id, fake_id))
-        conn.execute("UPDATE comments SET target_user_id = ? WHERE target_user_id = ?", (real_id, fake_id))
-        conn.commit()
-
-        name = fake_profile.get('name', 'Без имени')
-        await message.answer(
-            f"Анкета <b>{name}</b> (ID: {fake_id}) привязана к TG ID {real_id}.\n\n"
-            f"Теперь девушка может написать боту /start и получит доступ к своей анкете "
-            f"с меню редактирования профиля, услуг, графика и т.д."
-        )
-    except Exception as e:
-        conn.rollback()
-        await message.answer(f"Ошибка: {e}")
-    finally:
-        conn.close()
+    db.add_girl_whitelist(girl_id)
+    await message.answer(
+        f"Доступ выдан для TG ID <code>{girl_id}</code>.\n\n"
+        f"Теперь девушка пишет боту /start и заполняет свою анкету."
+    )
 
 
 @router.message(Command("admin_add"))
