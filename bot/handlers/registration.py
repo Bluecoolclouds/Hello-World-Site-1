@@ -222,9 +222,9 @@ def get_services_category_keyboard(cat_id: str, services: list) -> InlineKeyboar
     cat = SERVICES_CATALOG.get(cat_id)
     if not cat:
         return kb
-    for item in cat['items']:
+    for idx, item in enumerate(cat['items']):
         check = "+" if item in services else "-"
-        kb.row(InlineKeyboardButton(text=f"{check} {item}", callback_data=f"svc_toggle_{cat_id}_{item}"))
+        kb.row(InlineKeyboardButton(text=f"{check} {item}", callback_data=f"svt:{cat_id}:{idx}"))
     kb.row(InlineKeyboardButton(text="Назад к категориям", callback_data="svc_back_cats"))
     return kb
 
@@ -1167,16 +1167,26 @@ async def svc_category_view(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("svc_toggle_"))
+@router.callback_query(F.data.startswith("svt:"))
 async def svc_toggle_item(callback: CallbackQuery, state: FSMContext):
-    parts = callback.data.replace("svc_toggle_", "").split("_", 1)
-    if len(parts) != 2:
+    parts = callback.data.split(":")
+    if len(parts) != 3:
         await callback.answer()
         return
-    cat_id, item_name = parts
+    _, cat_id, idx_str = parts
     if cat_id not in SERVICES_CATALOG:
         await callback.answer()
         return
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        await callback.answer()
+        return
+    cat = SERVICES_CATALOG[cat_id]
+    if idx < 0 or idx >= len(cat['items']):
+        await callback.answer()
+        return
+    item_name = cat['items'][idx]
 
     user = db.get_user(callback.from_user.id)
     services = parse_services(user.get('services', '')) if user else []
@@ -1188,14 +1198,9 @@ async def svc_toggle_item(callback: CallbackQuery, state: FSMContext):
 
     db.update_user_field(callback.from_user.id, 'services', json.dumps(services))
 
-    cat = SERVICES_CATALOG[cat_id]
     kb = get_services_category_keyboard(cat_id, services)
     try:
-        await callback.message.edit_text(
-            f"<b>{cat['name']}</b>\n\nНажмите, чтобы включить/выключить:",
-            reply_markup=kb.as_markup(),
-            parse_mode="HTML"
-        )
+        await callback.message.edit_reply_markup(reply_markup=kb.as_markup())
     except Exception:
         pass
     await callback.answer()
