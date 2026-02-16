@@ -106,6 +106,14 @@ class Database:
             if 'name' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
                 logger.info("Добавлена колонка name")
+
+            if 'filter_min_age' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN filter_min_age INTEGER")
+                logger.info("Добавлена колонка filter_min_age")
+
+            if 'filter_max_age' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN filter_max_age INTEGER")
+                logger.info("Добавлена колонка filter_max_age")
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -151,6 +159,23 @@ class Database:
                 )
             """)
 
+    def create_male_user(self, user_id: int, username: str = None):
+        with sqlite3.connect(self.db_path) as conn:
+            existing = conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            if existing:
+                return
+            conn.execute("""
+                INSERT INTO users (user_id, username, age, gender, city, bio, preferences, looking_for, is_fake, last_active, created_at)
+                VALUES (?, ?, 25, 'м', 'астрахань', '', 'ж', '', 0, strftime('%s', 'now'), strftime('%s', 'now'))
+            """, (user_id, username))
+
+    def update_user_filters(self, user_id: int, min_age: int = None, max_age: int = None):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET filter_min_age = ?, filter_max_age = ? WHERE user_id = ?",
+                (min_age, max_age, user_id)
+            )
+
     def save_user(self, user_id: int, data: Dict):
         city = normalize_city(data['city'])
         with sqlite3.connect(self.db_path) as conn:
@@ -176,7 +201,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age'}
         if field not in allowed:
             return
         if field == 'city':

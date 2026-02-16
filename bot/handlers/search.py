@@ -142,12 +142,14 @@ async def search_for_user(user_id: int, message: Message):
         await message.answer(error_msg)
         return
 
-    profile = db.get_random_profile(user_id, user['city'], user['preferences'])
+    min_age = user.get('filter_min_age')
+    max_age = user.get('filter_max_age')
+    profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
         await message.answer(
-            "😔 К сожалению, в вашем городе пока нет новых анкет.\n"
-            "Попробуйте позже или измените настройки поиска."
+            "Пока нет новых анкет.\n"
+            "Попробуйте позже или измените фильтры поиска."
         )
         return
 
@@ -161,11 +163,10 @@ async def search_for_user(user_id: int, message: Message):
 
 
 async def search_for_user_via_bot(user_id: int, bot):
-    """Поиск анкеты через объект бота (для callback)"""
     user = db.get_user(user_id)
     
     if not user:
-        await bot.send_message(user_id, "❌ Сначала зарегистрируйтесь! /start")
+        await bot.send_message(user_id, "Сначала нажмите /start")
         return
 
     now = time.time()
@@ -180,13 +181,15 @@ async def search_for_user_via_bot(user_id: int, bot):
         await bot.send_message(user_id, error_msg)
         return
 
-    profile = db.get_random_profile(user_id, user['city'], user['preferences'])
+    min_age = user.get('filter_min_age')
+    max_age = user.get('filter_max_age')
+    profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
         await bot.send_message(
             user_id,
-            "😔 К сожалению, в вашем городе пока нет новых анкет.\n"
-            "Попробуйте позже или измените настройки поиска."
+            "Пока нет новых анкет.\n"
+            "Попробуйте позже или измените фильтры поиска."
         )
         return
 
@@ -275,12 +278,14 @@ async def show_next_profile(callback: CallbackQuery):
         await callback.bot.send_message(user_id, error_msg)
         return
 
-    profile = db.get_random_profile(user_id, user['city'], user['preferences'])
+    min_age = user.get('filter_min_age')
+    max_age = user.get('filter_max_age')
+    profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
         await callback.bot.send_message(
             user_id,
-            "😔 Анкеты закончились! Возвращайтесь позже."
+            "Анкеты закончились! Возвращайтесь позже."
         )
         return
 

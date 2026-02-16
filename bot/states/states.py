@@ -14,3 +14,8 @@ class EditProfile(StatesGroup):
     age = State()
     city = State()
     bio = State()
+
+
+class FilterState(StatesGroup):
+    min_age = State()
+    max_age = State()

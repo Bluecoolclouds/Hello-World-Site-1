@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -10,29 +10,25 @@ router = Router()
 db = Database()
 
 @router.message(Command("profile"))
-@router.message(F.text == "👤 Профиль")
 async def show_profile(message: Message):
     user = db.get_user(message.from_user.id)
     if not user:
-        await message.answer("Ваш профиль не найден. Пройдите регистрацию: /start")
+        await message.answer("Профиль не найден. Нажмите /start")
         return
 
-    profile_text = (
-        f"👤 Ваш профиль:\n\n"
-        f"Возраст: {user['age']}\n"
-        f"Пол: {user['gender']}\n"
-        f"Город: {user['city']}\n"
-        f"О себе: {user['bio']}\n"
-        f"Предпочтения: {user['preferences']}"
-    )
-
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="📝 Редактировать", callback_data="edit_profile"),
-        InlineKeyboardButton(text="🏠 Главная", callback_data="main_menu")
-    )
-
-    await message.answer(profile_text, reply_markup=builder.as_markup())
+    if user.get('gender') == 'ж':
+        from bot.handlers.registration import format_profile, send_profile_with_photo
+        profile_text = format_profile(user)
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_profile"),
+            InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")
+        )
+        await send_profile_with_photo(message.bot, message.chat.id, user, profile_text, builder.as_markup())
+    else:
+        from bot.handlers.registration import get_male_menu_keyboard
+        kb = get_male_menu_keyboard()
+        await message.answer("Главное меню", reply_markup=kb.as_markup())
 
 @router.callback_query(F.data == "main_menu")
 async def back_to_main(callback):
