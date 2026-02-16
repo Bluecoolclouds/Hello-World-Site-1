@@ -1016,15 +1016,15 @@ async def view_comments(callback: CallbackQuery):
     comments = db.get_comments(user_id, limit=10)
 
     if not comments:
-        await callback.answer("Пока нет отзывов")
-        return
-
-    text = "<b>Отзывы:</b>\n\n"
-    for c in comments:
-        author = f"@{c['username']}" if c.get('username') else f"ID:{c['from_user_id']}"
-        text += f"  {author}: {c['text']}\n\n"
+        text = "<b>Отзывы:</b>\n\nПока нет отзывов."
+    else:
+        text = "<b>Отзывы:</b>\n\n"
+        for c in comments:
+            author = f"@{c['username']}" if c.get('username') else f"ID:{c['from_user_id']}"
+            text += f"  {author}: {c['text']}\n\n"
 
     kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Оставить отзыв", callback_data=f"comment_{user_id}"))
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     await callback.message.answer(text, reply_markup=kb.as_markup())
     await callback.answer()

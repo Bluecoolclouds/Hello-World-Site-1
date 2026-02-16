@@ -19,21 +19,14 @@ HOURLY_LIMIT = 50
 HOUR_IN_SECONDS = 3600
 
 
-def get_search_keyboard(profile_user_id: int, is_tracked: bool = False) -> InlineKeyboardBuilder:
+def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="Лайк", callback_data=f"like_{profile_user_id}"),
         InlineKeyboardButton(text="Подарок", callback_data=f"gift_{profile_user_id}"),
         InlineKeyboardButton(text="Пропустить", callback_data=f"skip_{profile_user_id}")
     )
-    if is_tracked:
-        kb.row(InlineKeyboardButton(text="Убрать из отслеживаемых", callback_data=f"untrack_{profile_user_id}"))
-    else:
-        kb.row(InlineKeyboardButton(text="Отслеживать", callback_data=f"track_{profile_user_id}"))
-    kb.row(
-        InlineKeyboardButton(text="Отзыв", callback_data=f"comment_{profile_user_id}"),
-        InlineKeyboardButton(text="Отзывы", callback_data=f"view_comments_{profile_user_id}")
-    )
+    kb.row(InlineKeyboardButton(text="Отзывы/комментарии", callback_data=f"view_comments_{profile_user_id}"))
     return kb
 
 
@@ -193,8 +186,7 @@ async def search_for_user(user_id: int, message: Message):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    is_tracked = db.is_tracking(user_id, profile['user_id'])
-    kb = get_search_keyboard(profile['user_id'], is_tracked)
+    kb = get_search_keyboard(profile['user_id'])
 
     await send_profile_with_photo(message.bot, message.chat.id, profile, profile_text, kb.as_markup())
 
@@ -234,8 +226,7 @@ async def search_for_user_via_bot(user_id: int, bot):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    is_tracked = db.is_tracking(user_id, profile['user_id'])
-    kb = get_search_keyboard(profile['user_id'], is_tracked)
+    kb = get_search_keyboard(profile['user_id'])
 
     await send_profile_with_photo(bot, user_id, profile, profile_text, kb.as_markup())
 
@@ -252,12 +243,13 @@ async def handle_like(callback: CallbackQuery):
     from_id = callback.from_user.id
     
     is_match = db.add_like(from_id, to_id)
+    db.add_tracking(from_id, to_id)
     
     if is_match:
         db.create_match(from_id, to_id)
         await check_and_notify_match(callback, from_id, to_id)
     else:
-        await callback.answer("💕 Лайк отправлен!")
+        await callback.answer("Лайк отправлен!")
         await notify_new_like(callback.bot, to_id, from_id)
     
     await show_next_profile(callback)
@@ -331,8 +323,7 @@ async def show_next_profile(callback: CallbackQuery):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    is_tracked = db.is_tracking(user_id, profile['user_id'])
-    kb = get_search_keyboard(profile['user_id'], is_tracked)
+    kb = get_search_keyboard(profile['user_id'])
 
     await send_profile_with_photo(callback.bot, user_id, profile, profile_text, kb.as_markup())
 
@@ -370,8 +361,7 @@ async def show_next_profile_for_message(message: Message, user: dict):
     db.increment_view_count(profile['user_id'])
 
     profile_text = format_profile_text(profile)
-    is_tracked = db.is_tracking(user_id, profile['user_id'])
-    kb = get_search_keyboard(profile['user_id'], is_tracked)
+    kb = get_search_keyboard(profile['user_id'])
 
     await send_profile_with_photo(message.bot, user_id, profile, profile_text, kb.as_markup())
 
