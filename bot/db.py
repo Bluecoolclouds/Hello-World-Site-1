@@ -167,6 +167,10 @@ class Database:
                 conn.execute("ALTER TABLE users ADD COLUMN min_age_restriction INTEGER DEFAULT 18")
                 logger.info("Добавлена колонка min_age_restriction")
 
+            if 'name_changed_at' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN name_changed_at REAL DEFAULT 0")
+                logger.info("Добавлена колонка name_changed_at")
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS likes (
@@ -304,7 +308,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name', 'name_changed_at', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
         if field not in allowed:
             return
         if field == 'city':
@@ -743,7 +747,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT c.id, c.from_user_id, c.text, c.created_at, u.username, u.age
+                SELECT c.id, c.from_user_id, c.text, c.created_at, u.username, u.age, u.name
                 FROM comments c
                 LEFT JOIN users u ON c.from_user_id = u.user_id
                 WHERE c.to_user_id = ?

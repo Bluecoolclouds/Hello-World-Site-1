@@ -1020,8 +1020,9 @@ async def view_comments(callback: CallbackQuery):
     else:
         text = "<b>Отзывы:</b>\n\n"
         for c in comments:
-            author = f"@{c['username']}" if c.get('username') else f"ID:{c['from_user_id']}"
-            text += f"  {author}: {c['text']}\n\n"
+            name = c.get('name') or ''
+            author = name if name else "Аноним"
+            text += f"  <b>{author}:</b> {c['text']}\n\n"
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Оставить отзыв", callback_data=f"comment_{user_id}"))
@@ -1116,7 +1117,9 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
             reply_markup=kb.as_markup()
         )
     else:
+        current_name = user.get('name', '') or 'Аноним'
         kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text=f"Имя: {current_name}", callback_data="edit_name"))
         kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
         kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
         kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
@@ -1472,6 +1475,16 @@ async def girl_stats(callback: CallbackQuery):
 
 @router.callback_query(F.data == "edit_name")
 async def edit_name_callback(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
+    is_girl = user.get('is_girl', 0) if user else 0
+    if not is_girl:
+        name_changed_at = user.get('name_changed_at', 0) or 0
+        now = time.time()
+        days_passed = (now - name_changed_at) / 86400
+        if name_changed_at > 0 and days_passed < 14:
+            days_left = int(14 - days_passed) + 1
+            await callback.answer(f"Имя можно менять раз в 14 дней. Осталось {days_left} дн.", show_alert=True)
+            return
     await state.set_state(EditProfile.name)
     await callback.message.answer("Введите новое имя:")
     await callback.answer()
@@ -1484,6 +1497,10 @@ async def process_edit_name(message: Message, state: FSMContext):
         await message.answer("Имя слишком короткое. Минимум 2 символа:")
         return
     db.update_user_field(message.from_user.id, 'name', name)
+    user = db.get_user(message.from_user.id)
+    is_girl = user.get('is_girl', 0) if user else 0
+    if not is_girl:
+        db.update_user_field(message.from_user.id, 'name_changed_at', time.time())
     await state.clear()
     await message.answer("Имя обновлено!")
     await show_updated_profile(message.bot, message.from_user.id)
