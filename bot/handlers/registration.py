@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration
+from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration, PriceEdit
 from bot.keyboards.keyboards import get_main_menu, get_male_reply_keyboard
 from bot.db import Database, format_online_status
 
@@ -14,6 +14,75 @@ router = Router()
 db = Database()
 
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+
+PRICE_FIELDS = {
+    'apt_day_1h': 'Апартаменты днём 1 час',
+    'apt_day_2h': 'Апартаменты днём 2 часа',
+    'apt_night_1h': 'Апартаменты ночью 1 час',
+    'apt_night': 'Апартаменты ночь',
+    'out_day_1h': 'Выезд днём 1 час',
+    'out_day_2h': 'Выезд днём 2 часа',
+    'out_night_1h': 'Выезд ночью 1 час',
+    'out_night': 'Выезд ночь',
+    'contacts_hour': 'Контактов в час',
+    'prepay': 'Предоплата',
+}
+
+
+def parse_prices(prices_str: str) -> dict:
+    if not prices_str:
+        return {}
+    try:
+        return json.loads(prices_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def format_price_table(prices: dict, for_pre: bool = False) -> str:
+    if not prices:
+        return "Цены не заданы"
+
+    def val(key):
+        v = prices.get(key, '')
+        return str(v) if v else '-'
+
+    lines = []
+    if for_pre:
+        lines.append("         Днём          Ночью")
+        lines.append("       Час   2часа   Час   Ночь")
+    else:
+        lines.append("<b>Цены:</b>")
+        lines.append("         Днём          Ночью")
+        lines.append("       Час   2часа   Час   Ночь")
+
+    lines.append(f"Апарт. {val('apt_day_1h'):>6} {val('apt_day_2h'):>6} {val('apt_night_1h'):>6} {val('apt_night'):>6}")
+    lines.append(f"Выезд  {val('out_day_1h'):>6} {val('out_day_2h'):>6} {val('out_night_1h'):>6} {val('out_night'):>6}")
+
+    lines.append(f"\nКонтактов в час: {val('contacts_hour')}")
+    lines.append(f"Предоплата: {val('prepay')}")
+
+    return "\n".join(lines)
+
+
+def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+
+    def btn(key, label):
+        v = prices.get(key, '')
+        display = str(v) if v else '-'
+        return InlineKeyboardButton(text=f"{label}: {display}", callback_data=f"price_set_{key}")
+
+    kb.row(InlineKeyboardButton(text="--- Днём ---", callback_data="price_noop"))
+    kb.row(btn('apt_day_1h', 'Апарт. 1ч'), btn('apt_day_2h', 'Апарт. 2ч'))
+    kb.row(btn('out_day_1h', 'Выезд 1ч'), btn('out_day_2h', 'Выезд 2ч'))
+    kb.row(InlineKeyboardButton(text="--- Ночью ---", callback_data="price_noop"))
+    kb.row(btn('apt_night_1h', 'Апарт. 1ч'), btn('apt_night', 'Апарт. ночь'))
+    kb.row(btn('out_night_1h', 'Выезд 1ч'), btn('out_night', 'Выезд ночь'))
+    kb.row(InlineKeyboardButton(text="--- Прочее ---", callback_data="price_noop"))
+    kb.row(btn('contacts_hour', 'Контактов/час'), btn('prepay', 'Предоплата'))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data="price_done"))
+    return kb
+
 
 LOOKING_FOR_OPTIONS = {
     'all_now': 'Все и сразу',
@@ -89,13 +158,10 @@ def format_profile(user: dict) -> str:
     if bio and bio != "Не указано" and bio != "":
         lines.append(f"О себе: {bio}")
 
-    services = user.get('services', '')
-    if services:
-        lines.append(f"Услуги: {services}")
-
-    prices = user.get('prices', '')
-    if prices:
-        lines.append(f"Цены: {prices}")
+    prices_data = parse_prices(user.get('prices', ''))
+    if prices_data:
+        lines.append("")
+        lines.append(format_price_table(prices_data))
 
     schedule = user.get('schedule', '')
     if schedule:
@@ -854,36 +920,125 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "edit_services")
 async def edit_services_callback(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(callback.from_user.id)
-    current = user.get('services', '') if user else ''
+    prices = parse_prices(user.get('prices', '')) if user else {}
 
-    await state.set_state(EditProfile.services)
-    kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+    table_text = format_price_table(prices, for_pre=True)
+    text = f"<b>Услуги и цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить значение:"
 
-    text = "<b>Услуги и цены</b>\n\n"
-    if current:
-        text += f"Сейчас: {current}\n\n"
-    text += "Введите описание ваших услуг и цен:"
-
+    kb = get_prices_keyboard(prices)
     await callback.message.answer(text, reply_markup=kb.as_markup())
     await callback.answer()
 
 
-@router.message(EditProfile.services)
-async def process_edit_services(message: Message, state: FSMContext):
-    text = message.text.strip() if message.text else ""
-    if text == "-":
-        text = ""
-    if len(text) > 1000:
-        await message.answer("Слишком длинный текст. Максимум 1000 символов:")
+@router.callback_query(F.data == "price_noop")
+async def price_noop(callback: CallbackQuery):
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("price_set_"))
+async def price_set_field(callback: CallbackQuery, state: FSMContext):
+    field = callback.data.replace("price_set_", "")
+    if field not in PRICE_FIELDS:
+        await callback.answer("Неизвестное поле")
         return
-    db.update_user_field(message.from_user.id, 'services', text)
+
+    label = PRICE_FIELDS[field]
+    await state.set_state(PriceEdit.field)
+    await state.update_data(price_field=field)
+
+    hint = "Введите число или текст (например: 6000, нет, неограниченно):"
+    if field == 'prepay':
+        hint = "Введите: да или нет"
+    elif field == 'contacts_hour':
+        hint = "Введите число или 'неограниченно':"
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Убрать значение", callback_data="price_clear_field"))
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="price_cancel_edit"))
+    await callback.message.answer(
+        f"<b>{label}</b>\n\n{hint}",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "price_clear_field")
+async def price_clear_field(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    field = data.get('price_field')
+    if not field:
+        await callback.answer()
+        return
+
+    user = db.get_user(callback.from_user.id)
+    prices = parse_prices(user.get('prices', '')) if user else {}
+    prices.pop(field, None)
+    db.update_user_field(callback.from_user.id, 'prices', json.dumps(prices))
     await state.clear()
-    await message.answer("Услуги обновлены!")
+
+    table_text = format_price_table(prices, for_pre=True)
+    kb = get_prices_keyboard(prices)
+    await callback.message.answer(
+        f"<b>Услуги и цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить:",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer("Значение убрано")
+
+
+@router.callback_query(F.data == "price_cancel_edit")
+async def price_cancel_edit(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    user = db.get_user(callback.from_user.id)
+    prices = parse_prices(user.get('prices', '')) if user else {}
+    table_text = format_price_table(prices, for_pre=True)
+    kb = get_prices_keyboard(prices)
+    await callback.message.answer(
+        f"<b>Услуги и цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить:",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.message(PriceEdit.field)
+async def process_price_value(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get('price_field')
+    if not field:
+        await state.clear()
+        return
+
+    value = message.text.strip() if message.text else ""
+    if not value:
+        await message.answer("Введите значение:")
+        return
+
+    if len(value) > 50:
+        await message.answer("Слишком длинное значение. Максимум 50 символов:")
+        return
+
     user = db.get_user(message.from_user.id)
+    prices = parse_prices(user.get('prices', '')) if user else {}
+    prices[field] = value
+    db.update_user_field(message.from_user.id, 'prices', json.dumps(prices))
+    await state.clear()
+
+    table_text = format_price_table(prices, for_pre=True)
+    kb = get_prices_keyboard(prices)
+    await message.answer(
+        f"<b>Услуги и цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить:",
+        reply_markup=kb.as_markup()
+    )
+
+
+@router.callback_query(F.data == "price_done")
+async def price_done(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.answer("Цены сохранены!")
+    user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
         kb = get_female_menu_keyboard()
-        await message.answer("Главное меню", reply_markup=kb.as_markup())
+        await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
+    await callback.answer()
 
 
 @router.callback_query(F.data == "edit_schedule")

@@ -35,3 +35,7 @@ class GirlRegistration(StatesGroup):
     city = State()
     bio = State()
     photo = State()
+
+
+class PriceEdit(StatesGroup):
+    field = State()
