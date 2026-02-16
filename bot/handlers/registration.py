@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.states.states import Registration, EditProfile, FilterState
+from bot.states.states import Registration, EditProfile, FilterState, CommentState
 from bot.keyboards.keyboards import get_main_menu
 from bot.db import Database, format_online_status
 
@@ -29,17 +29,23 @@ def format_looking_for(looking_for: str) -> str:
 
 def get_male_menu_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="🔍 Смотреть анкеты", callback_data="start_search"))
-    kb.row(InlineKeyboardButton(text="⚙️ Фильтры поиска", callback_data="open_filters"))
-    kb.row(InlineKeyboardButton(text="📊 Статистика", callback_data="show_stats"))
+    kb.row(InlineKeyboardButton(text="Листать девушек", callback_data="start_search"))
+    kb.row(InlineKeyboardButton(text="Мои отслеживаемые", callback_data="my_tracked"))
+    kb.row(InlineKeyboardButton(text="Фильтры", callback_data="open_filters"))
+    kb.row(InlineKeyboardButton(text="Чаты / сообщения", callback_data="open_chats"))
+    kb.row(InlineKeyboardButton(text="Профиль", callback_data="my_profile_male"))
+    kb.row(InlineKeyboardButton(text="Помощь / правила", callback_data="show_help"))
     return kb
 
 
 def get_female_menu_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="👤 Моя анкета", callback_data="show_profile"))
-    kb.row(InlineKeyboardButton(text="✏️ Редактировать анкету", callback_data="edit_profile"))
-    kb.row(InlineKeyboardButton(text="💑 Мои матчи", callback_data="show_matches"))
+    kb.row(InlineKeyboardButton(text="Настроить / редактировать профиль", callback_data="edit_profile"))
+    kb.row(InlineKeyboardButton(text="Мои фото/видео", callback_data="edit_photo"))
+    kb.row(InlineKeyboardButton(text="Услуги и цены", callback_data="edit_services"))
+    kb.row(InlineKeyboardButton(text="График / онлайн", callback_data="edit_schedule"))
+    kb.row(InlineKeyboardButton(text="Кто меня отслеживает / лайкнул", callback_data="my_followers"))
+    kb.row(InlineKeyboardButton(text="Статистика", callback_data="girl_stats"))
     return kb
 
 
@@ -54,10 +60,10 @@ def get_filter_keyboard(user: dict) -> InlineKeyboardBuilder:
         age_text = f"от {min_age}"
     elif max_age:
         age_text = f"до {max_age}"
-    kb.row(InlineKeyboardButton(text=f"📅 Возраст: {age_text}", callback_data="filter_age"))
-    kb.row(InlineKeyboardButton(text="🗑 Сбросить фильтры", callback_data="filter_reset"))
-    kb.row(InlineKeyboardButton(text="🔍 Начать поиск", callback_data="start_search"))
-    kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main"))
+    kb.row(InlineKeyboardButton(text=f"Возраст: {age_text}", callback_data="filter_age"))
+    kb.row(InlineKeyboardButton(text="Сбросить фильтры", callback_data="filter_reset"))
+    kb.row(InlineKeyboardButton(text="Начать поиск", callback_data="start_search"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     return kb
 
 
@@ -72,26 +78,40 @@ def format_profile(user: dict) -> str:
     looking_for_text = format_looking_for(user.get('looking_for', ''))
     online_status = format_online_status(user.get('last_active'))
     bio = user.get('bio', 'Не указано')
+    name = user.get('name', '')
 
-    lines = [f"👤 <b>Анкета:</b>\n"]
-    lines.append(f"1. Возраст: {user['age']}")
-    lines.append(f"2. Пол: {gender_text}")
-    lines.append(f"3. Город: {user['city']}")
+    lines = []
+    if name:
+        lines.append(f"<b>{name}</b>\n")
+    lines.append(f"<b>Анкета:</b>\n")
+    lines.append(f"Возраст: {user['age']}")
+    lines.append(f"Пол: {gender_text}")
+    lines.append(f"Город: {user['city']}")
 
     if bio and bio != "Не указано" and bio != "":
-        lines.append(f"4. О себе: {bio}")
+        lines.append(f"О себе: {bio}")
+
+    services = user.get('services', '')
+    if services:
+        lines.append(f"Услуги: {services}")
+
+    prices = user.get('prices', '')
+    if prices:
+        lines.append(f"Цены: {prices}")
+
+    schedule = user.get('schedule', '')
+    if schedule:
+        lines.append(f"График: {schedule}")
+
+    is_online = user.get('is_online', 0)
+    if is_online:
+        lines.append("Онлайн сейчас")
     else:
-        lines.append(f"4. О себе: Не указано")
+        lines.append(online_status)
 
-    lines.append(f"5. Кого показывать: {pref_text}")
-
-    if looking_for_text and looking_for_text != "Не указано":
-        lines.append(f"6. Я ищу: {looking_for_text}")
-    else:
-        lines.append(f"6. Я ищу: Не указано")
-
-    lines.append(f"7. Фото/видео")
-    lines.append(online_status)
+    comments_count = db.get_comments_count(user['user_id'])
+    if comments_count > 0:
+        lines.append(f"Отзывы: {comments_count}")
 
     return "\n".join(lines)
 
@@ -113,7 +133,7 @@ async def send_profile_with_photo(bot, chat_id: int, user: dict, text: str, repl
                     group.append(InputMediaPhoto(media=item["id"], caption=caption_text, parse_mode="HTML"))
             await bot.send_media_group(chat_id=chat_id, media=group)
             if reply_markup:
-                await bot.send_message(chat_id=chat_id, text="⬆️", reply_markup=reply_markup, parse_mode="HTML")
+                await bot.send_message(chat_id=chat_id, text="---", reply_markup=reply_markup, parse_mode="HTML")
             return
         except Exception:
             pass
@@ -171,7 +191,7 @@ async def cmd_start(message: Message, state: FSMContext):
             await message.answer("Ваш аккаунт заблокирован.")
             return
 
-        if user.get('gender') == 'ж':
+        if user.get('is_girl'):
             profile_text = format_profile(user)
             kb = get_female_menu_keyboard()
             await send_profile_with_photo(
@@ -184,16 +204,14 @@ async def cmd_start(message: Message, state: FSMContext):
         else:
             kb = get_male_menu_keyboard()
             await message.answer(
-                "<b>Добро пожаловать!</b>\n\n"
-                "Нажмите кнопку ниже, чтобы начать просмотр анкет.",
+                "<b>Главное меню</b>",
                 reply_markup=kb.as_markup()
             )
     else:
         db.create_male_user(user_id, message.from_user.username)
         kb = get_male_menu_keyboard()
         await message.answer(
-            "<b>Добро пожаловать!</b>\n\n"
-            "Нажмите кнопку ниже, чтобы начать просмотр анкет.",
+            "<b>Добро пожаловать!</b>\n\nВыберите действие:",
             reply_markup=kb.as_markup()
         )
 
@@ -202,12 +220,96 @@ async def cmd_start(message: Message, state: FSMContext):
 async def back_to_main(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     user = db.get_user(callback.from_user.id)
-    if user and user.get('gender') == 'ж':
+    if user and user.get('is_girl'):
         kb = get_female_menu_keyboard()
         await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
     else:
         kb = get_male_menu_keyboard()
         await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "show_help")
+async def show_help(callback: CallbackQuery):
+    help_text = (
+        "<b>Помощь / правила</b>\n\n"
+        "1. Листайте анкеты девушек\n"
+        "2. Ставьте лайки или отправляйте подарки\n"
+        "3. Если девушка ответит взаимностью - будет матч\n"
+        "4. Отслеживайте понравившихся девушек\n"
+        "5. Оставляйте отзывы на анкетах\n\n"
+        "Команды:\n"
+        "/start - Главное меню\n"
+        "/search - Искать анкеты\n"
+        "/chats - Мои чаты\n"
+        "/matches - Мои матчи\n"
+    )
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(help_text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "my_profile_male")
+async def my_profile_male(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("Профиль не найден")
+        return
+
+    username = user.get('username', 'Не указан')
+    age = user.get('age', 25)
+    city = user.get('city', 'астрахань')
+
+    text = (
+        f"<b>Ваш профиль</b>\n\n"
+        f"Ник: @{username}\n"
+        f"Возраст: {age}\n"
+        f"Город: {city}\n"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "open_chats")
+async def open_chats_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user = db.get_user(user_id)
+    if not user:
+        await callback.answer("Ошибка")
+        return
+
+    matches = db.get_user_matches(user_id)
+    if not matches:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            "У вас пока нет чатов.\n"
+            "Чтобы начать общение, найдите кого-то и получите взаимный лайк!",
+            reply_markup=kb.as_markup()
+        )
+        await callback.answer()
+        return
+
+    active_matches = [m for m in matches if not db.is_blocked(user_id, m['matched_user_id'])]
+    if not active_matches:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            "Все ваши чаты заблокированы или удалены.",
+            reply_markup=kb.as_markup()
+        )
+        await callback.answer()
+        return
+
+    from bot.handlers.chats import get_chats_list_keyboard
+    chats_text = f"<b>Ваши чаты ({len(active_matches)}):</b>\n\nВыберите чат:"
+    kb = get_chats_list_keyboard(active_matches)
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(chats_text, reply_markup=kb.as_markup())
     await callback.answer()
 
 
@@ -226,7 +328,9 @@ async def show_stats_callback(callback: CallbackQuery):
         f"Всего матчей: {stats['matches_count']}\n"
         f"Поисков за час: {stats['search_count_hour']}/50"
     )
-    await callback.message.answer(stats_text)
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(stats_text, reply_markup=kb.as_markup())
     await callback.answer()
 
 
@@ -326,6 +430,145 @@ async def start_search_callback(callback: CallbackQuery):
         await callback.answer(f"Ошибка: {str(e)[:50]}", show_alert=True)
 
 
+# === MY TRACKED (for men) ===
+
+@router.callback_query(F.data == "my_tracked")
+async def my_tracked(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    tracked = db.get_tracked_users(user_id)
+
+    if not tracked:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Листать девушек", callback_data="start_search"))
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            "У вас пока нет отслеживаемых.\n\n"
+            "Нажмите на анкете кнопку для отслеживания.",
+            reply_markup=kb.as_markup()
+        )
+        await callback.answer()
+        return
+
+    text = f"<b>Мои отслеживаемые ({len(tracked)}):</b>\n\n"
+    kb = InlineKeyboardBuilder()
+    for i, t in enumerate(tracked[:15], 1):
+        name = t.get('name') or f"{t['age']} лет, {t['city']}"
+        online = format_online_status(t.get('last_active'))
+        kb.row(InlineKeyboardButton(
+            text=f"{name} | {online}",
+            callback_data=f"view_tracked_{t['tracked_user_id']}"
+        ))
+
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("view_tracked_"))
+async def view_tracked_profile(callback: CallbackQuery):
+    tracked_id = int(callback.data.split("_")[2])
+    user = db.get_user(tracked_id)
+    if not user:
+        await callback.answer("Профиль не найден")
+        return
+
+    profile_text = format_profile(user)
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="Написать", url=f"tg://user?id={tracked_id}"),
+        InlineKeyboardButton(text="Убрать", callback_data=f"untrack_{tracked_id}")
+    )
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="my_tracked"))
+    await send_profile_with_photo(callback.bot, callback.from_user.id, user, profile_text, kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("track_"))
+async def track_user(callback: CallbackQuery):
+    tracked_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    db.add_tracking(user_id, tracked_id)
+    await callback.answer("Добавлено в отслеживаемые!")
+
+
+@router.callback_query(F.data.startswith("untrack_"))
+async def untrack_user(callback: CallbackQuery):
+    tracked_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    db.remove_tracking(user_id, tracked_id)
+    await callback.answer("Убрано из отслеживаемых")
+    tracked = db.get_tracked_users(user_id)
+    if not tracked:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer("Список отслеживаемых пуст.", reply_markup=kb.as_markup())
+    else:
+        kb = InlineKeyboardBuilder()
+        for t in tracked[:15]:
+            name = t.get('name') or f"{t['age']} лет, {t['city']}"
+            kb.row(InlineKeyboardButton(
+                text=name,
+                callback_data=f"view_tracked_{t['tracked_user_id']}"
+            ))
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            f"<b>Мои отслеживаемые ({len(tracked)}):</b>",
+            reply_markup=kb.as_markup()
+        )
+
+
+# === COMMENTS ===
+
+@router.callback_query(F.data.startswith("comment_"))
+async def start_comment(callback: CallbackQuery, state: FSMContext):
+    to_id = int(callback.data.split("_")[1])
+    await state.set_state(CommentState.text)
+    await state.update_data(comment_to_id=to_id)
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+    await callback.message.answer("Напишите ваш отзыв:", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.message(CommentState.text)
+async def process_comment(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if len(text) < 2:
+        await message.answer("Отзыв слишком короткий. Минимум 2 символа:")
+        return
+    if len(text) > 500:
+        await message.answer("Отзыв слишком длинный. Максимум 500 символов:")
+        return
+
+    data = await state.get_data()
+    to_id = data.get('comment_to_id')
+    db.add_comment(message.from_user.id, to_id, text)
+    await state.clear()
+    await message.answer("Отзыв добавлен!")
+
+
+@router.callback_query(F.data.startswith("view_comments_"))
+async def view_comments(callback: CallbackQuery):
+    user_id = int(callback.data.split("_")[2])
+    comments = db.get_comments(user_id, limit=10)
+
+    if not comments:
+        await callback.answer("Пока нет отзывов")
+        return
+
+    text = "<b>Отзывы:</b>\n\n"
+    for c in comments:
+        author = f"@{c['username']}" if c.get('username') else f"ID:{c['from_user_id']}"
+        text += f"  {author}: {c['text']}\n\n"
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+# === GIRL FEATURES ===
+
 @router.callback_query(F.data == "show_matches")
 async def show_matches_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -333,8 +576,7 @@ async def show_matches_callback(callback: CallbackQuery):
 
     if not matches:
         await callback.message.answer(
-            "У вас пока нет матчей.\n\n"
-            "Ждите — скоро кто-то вас оценит!"
+            "У вас пока нет матчей.\nЖдите - скоро кто-то вас оценит!"
         )
         await callback.answer()
         return
@@ -361,8 +603,8 @@ async def show_profile_callback(callback: CallbackQuery):
     profile_text = format_profile(user)
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_profile"),
-        InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")
+        InlineKeyboardButton(text="Редактировать", callback_data="edit_profile"),
+        InlineKeyboardButton(text="Назад", callback_data="back_to_main")
     )
 
     await send_profile_with_photo(
@@ -377,20 +619,214 @@ async def show_profile_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "edit_profile")
 async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
+    is_girl = user.get('is_girl', 0) if user else 0
+
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="1. Возраст", callback_data="edit_age"))
-    kb.row(InlineKeyboardButton(text="2. Город", callback_data="edit_city"))
-    kb.row(InlineKeyboardButton(text="3. О себе", callback_data="edit_bio"))
-    kb.row(InlineKeyboardButton(text="4. Кого показывать", callback_data="edit_pref"))
-    kb.row(InlineKeyboardButton(text="5. Я ищу", callback_data="edit_looking_for"))
-    kb.row(InlineKeyboardButton(text="6. Фото/видео", callback_data="edit_photo"))
-    kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data="show_profile"))
+    if is_girl:
+        kb.row(InlineKeyboardButton(text="Имя", callback_data="edit_name"))
+        kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
+        kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
+        kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
+        kb.row(InlineKeyboardButton(text="Фото/видео", callback_data="edit_photo"))
+    else:
+        kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
+        kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
+        kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
+        kb.row(InlineKeyboardButton(text="Кого показывать", callback_data="edit_pref"))
+        kb.row(InlineKeyboardButton(text="Я ищу", callback_data="edit_looking_for"))
+        kb.row(InlineKeyboardButton(text="Фото/видео", callback_data="edit_photo"))
+
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
 
     await callback.message.answer(
         "<b>Что хотите изменить?</b>",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "edit_services")
+async def edit_services_callback(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
+    current = user.get('services', '') if user else ''
+
+    await state.set_state(EditProfile.services)
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+
+    text = "<b>Услуги и цены</b>\n\n"
+    if current:
+        text += f"Сейчас: {current}\n\n"
+    text += "Введите описание ваших услуг и цен:"
+
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.message(EditProfile.services)
+async def process_edit_services(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if text == "-":
+        text = ""
+    if len(text) > 1000:
+        await message.answer("Слишком длинный текст. Максимум 1000 символов:")
+        return
+    db.update_user_field(message.from_user.id, 'services', text)
+    await state.clear()
+    await message.answer("Услуги обновлены!")
+    user = db.get_user(message.from_user.id)
+    if user and user.get('is_girl'):
+        kb = get_female_menu_keyboard()
+        await message.answer("Главное меню", reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data == "edit_schedule")
+async def edit_schedule_callback(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
+    current_schedule = user.get('schedule', '') if user else ''
+    is_online = user.get('is_online', 0) if user else 0
+
+    kb = InlineKeyboardBuilder()
+    online_text = "Сейчас: онлайн" if is_online else "Сейчас: оффлайн"
+    kb.row(InlineKeyboardButton(
+        text=f"{'Выключить онлайн' if is_online else 'Включить онлайн'}",
+        callback_data="toggle_online"
+    ))
+    kb.row(InlineKeyboardButton(text="Изменить график", callback_data="change_schedule_text"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+
+    text = f"<b>График / онлайн</b>\n\n{online_text}\n"
+    if current_schedule:
+        text += f"График: {current_schedule}\n"
+
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "toggle_online")
+async def toggle_online(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("Ошибка")
+        return
+    new_val = 0 if user.get('is_online', 0) else 1
+    db.update_user_field(callback.from_user.id, 'is_online', new_val)
+    status = "Онлайн" if new_val else "Оффлайн"
+    await callback.answer(f"Статус: {status}")
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(
+        text=f"{'Выключить онлайн' if new_val else 'Включить онлайн'}",
+        callback_data="toggle_online"
+    ))
+    kb.row(InlineKeyboardButton(text="Изменить график", callback_data="change_schedule_text"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+
+    await callback.message.edit_text(
+        f"<b>График / онлайн</b>\n\nСейчас: {'онлайн' if new_val else 'оффлайн'}",
+        reply_markup=kb.as_markup()
+    )
+
+
+@router.callback_query(F.data == "change_schedule_text")
+async def change_schedule_text(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.schedule)
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+    await callback.message.answer(
+        "Введите ваш график (например: Пн-Пт 10:00-22:00):\n\n"
+        "Или отправьте <b>-</b> чтобы убрать.",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.message(EditProfile.schedule)
+async def process_edit_schedule(message: Message, state: FSMContext):
+    text = message.text.strip() if message.text else ""
+    if text == "-":
+        text = ""
+    db.update_user_field(message.from_user.id, 'schedule', text)
+    await state.clear()
+    await message.answer("График обновлён!")
+    user = db.get_user(message.from_user.id)
+    if user and user.get('is_girl'):
+        kb = get_female_menu_keyboard()
+        await message.answer("Главное меню", reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data == "my_followers")
+async def my_followers(callback: CallbackQuery):
+    user_id = callback.from_user.id
+
+    followers = db.get_followers(user_id)
+    likes = db.get_received_likes(user_id)
+
+    text = "<b>Кто меня отслеживает / лайкнул</b>\n\n"
+
+    if followers:
+        text += f"<b>Отслеживающие ({len(followers)}):</b>\n"
+        for f in followers[:10]:
+            name = f"@{f['username']}" if f.get('username') else f"ID:{f['follower_id']}"
+            text += f"  {name}, {f.get('age', '?')} лет\n"
+        text += "\n"
+
+    if likes:
+        text += f"<b>Лайкнули ({len(likes)}):</b>\n"
+        for l in likes[:10]:
+            text += f"  {l.get('age', '?')} лет, {l.get('city', '?')}\n"
+        text += "\n"
+
+    if not followers and not likes:
+        text += "Пока никто не отслеживает и не лайкнул.\n"
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "girl_stats")
+async def girl_stats(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    stats = db.get_girl_stats(user_id)
+
+    text = (
+        "<b>Статистика</b>\n\n"
+        f"Просмотров: {stats['views']}\n"
+        f"Лайков: {stats['likes_received']}\n"
+        f"Отслеживающих: {stats['followers']}\n"
+        f"Отзывов: {stats['comments']}\n"
+        f"Матчей: {stats['matches']}\n"
+        f"Активных чатов: {stats['chats_active']}\n"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+# === EDIT PROFILE FIELDS ===
+
+@router.callback_query(F.data == "edit_name")
+async def edit_name_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(EditProfile.name)
+    await callback.message.answer("Введите новое имя:")
+    await callback.answer()
+
+
+@router.message(EditProfile.name)
+async def process_edit_name(message: Message, state: FSMContext):
+    name = message.text.strip() if message.text else ""
+    if len(name) < 2:
+        await message.answer("Имя слишком короткое. Минимум 2 символа:")
+        return
+    db.update_user_field(message.from_user.id, 'name', name)
+    await state.clear()
+    await message.answer("Имя обновлено!")
+    await show_updated_profile(message.bot, message.from_user.id)
 
 
 def get_gender_keyboard() -> InlineKeyboardBuilder:
@@ -603,17 +1039,20 @@ async def process_video_note(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "skip_photo")
 async def skip_photo(callback: CallbackQuery, state: FSMContext):
-    await state.update_data(photo_id=None, media_type=None)
-    await finish_photo_edit(callback.bot, callback.from_user.id, state)
+    await state.clear()
+    await callback.message.answer("Фото не изменено.")
     await callback.answer()
 
 
 async def finish_photo_edit(bot, user_id: int, state: FSMContext):
     data = await state.get_data()
     photo_id = data.get('photo_id')
-    media_type = data.get('media_type')
-    db.update_user_field(user_id, 'photo_id', photo_id)
-    db.update_user_field(user_id, 'media_type', media_type)
+    media_type = data.get('media_type', 'photo')
+
+    if photo_id:
+        db.update_user_field(user_id, 'photo_id', photo_id)
+        db.update_user_field(user_id, 'media_type', media_type)
+
     await state.clear()
     await bot.send_message(user_id, "Фото/видео обновлено!")
     await show_updated_profile(bot, user_id)
@@ -623,10 +1062,11 @@ async def show_updated_profile(bot, user_id: int):
     user = db.get_user(user_id)
     if not user:
         return
-    profile_text = format_profile(user)
-    kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_profile"),
-        InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")
-    )
-    await send_profile_with_photo(bot, user_id, user, profile_text, kb.as_markup())
+
+    if user.get('is_girl'):
+        profile_text = format_profile(user)
+        kb = get_female_menu_keyboard()
+        await send_profile_with_photo(bot, user_id, user, profile_text, kb.as_markup())
+    else:
+        kb = get_male_menu_keyboard()
+        await bot.send_message(user_id, "Главное меню", reply_markup=kb.as_markup())

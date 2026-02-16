@@ -14,8 +14,16 @@ class EditProfile(StatesGroup):
     age = State()
     city = State()
     bio = State()
+    name = State()
+    services = State()
+    prices = State()
+    schedule = State()
 
 
 class FilterState(StatesGroup):
     min_age = State()
     max_age = State()
+
+
+class CommentState(StatesGroup):
+    text = State()

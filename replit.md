@@ -54,23 +54,33 @@ The `bot/` directory contains a fully functional Telegram dating bot built with 
 
 **Structure:**
 - `main.py` - Entry point with dispatcher setup and polling
-- `db.py` - SQLite database with users, likes, matches, blocks tables
+- `db.py` - SQLite database with users, likes, matches, blocks, comments, tracking tables
 - `handlers/` - Message and callback handlers:
-  - `registration.py` - User registration flow (/start)
+  - `registration.py` - /start handler, menus for men and girls, all inline callback handlers
   - `profile.py` - View/edit profile (/profile)
-  - `search.py` - Find matches (/search, /stats)
+  - `search.py` - Find matches (/search, /stats), profile display with track/comment buttons
   - `matching.py` - Match notifications (/matches, /likes)
   - `chats.py` - Chat management (/chats, /blocked)
-  - `admin.py` - Admin commands (/admin_stats, /admin_ban, /admin_unban)
+  - `admin.py` - Admin commands, adding fake girl profiles with is_girl flag
+  - `gifts.py` - Telegram Stars gifting
 - `keyboards/` - Reply and inline keyboards
-- `states/` - FSM states for registration
+- `states/` - FSM states: Registration, EditProfile, FilterState, CommentState
+
+**User Roles:**
+- Men (clients): Auto-registered on /start with city "астрахань". Menu: Browse girls, My tracked, Filters, Chats, Profile, Help.
+- Girls (admin-added, is_girl=1): Menu: Edit profile, Photos/videos, Services & prices, Schedule/online, Followers/likes, Stats.
+- Role check uses `is_girl` flag (set by admin when adding profiles).
 
 **Features:**
-- Search by city + gender preferences
+- Men browse girl profiles with Like/Gift/Skip/Track/Comment buttons
+- Tracking system: men can follow girls and see their online status
+- Comments: men leave reviews on girl profiles
+- Girl features: services/prices, schedule, online toggle, follower stats
+- Search by city with age filters (min/max)
 - 5 sec cooldown, 50/hour limit
 - Like/Skip with match notifications
 - Block/unblock users
-- Admin: stats, ban, unban, broadcast
+- Admin: stats, ban, unban, broadcast, add girl profiles
 
 **Environment variables:**
 - `BOT_TOKEN` - Telegram bot token from @BotFather

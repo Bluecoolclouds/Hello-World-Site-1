@@ -439,15 +439,17 @@ async def _save_profile(message: Message, state: FSMContext, media_list: list, c
     max_id = cursor.fetchone()[0] or 0
     fake_id = max(max_id + 1, 9000000000)
 
+    is_girl = 1 if gender == "ж" else 0
+
     now = time.time()
     conn.execute("""
         INSERT OR REPLACE INTO users
         (user_id, username, age, gender, city, bio, preferences, looking_for,
-         photo_id, media_type, media_ids, is_fake, view_count, last_search_at, search_count_hour,
-         last_hour_reset, is_banned, last_active, is_archived, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, 0, 0, ?, 0, ?)
+         photo_id, media_type, media_ids, is_fake, is_girl, view_count, last_search_at, search_count_hour,
+         last_hour_reset, is_banned, last_active, is_archived, created_at, name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, 0, 0, 0, 0, ?, 0, ?, ?)
     """, (fake_id, None, age, gender, city, bio, preferences, '',
-          main_media["id"], main_media["type"], media_ids_json, now, now))
+          main_media["id"], main_media["type"], media_ids_json, is_girl, now, now, parts[0].strip()))
     conn.commit()
     conn.close()
 

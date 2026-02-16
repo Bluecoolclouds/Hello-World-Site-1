@@ -19,12 +19,20 @@ HOURLY_LIMIT = 50
 HOUR_IN_SECONDS = 3600
 
 
-def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
+def get_search_keyboard(profile_user_id: int, is_tracked: bool = False) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_{profile_user_id}"),
-        InlineKeyboardButton(text="🎁 Подарок", callback_data=f"gift_{profile_user_id}"),
-        InlineKeyboardButton(text="💔 Пропустить", callback_data=f"skip_{profile_user_id}")
+        InlineKeyboardButton(text="Лайк", callback_data=f"like_{profile_user_id}"),
+        InlineKeyboardButton(text="Подарок", callback_data=f"gift_{profile_user_id}"),
+        InlineKeyboardButton(text="Пропустить", callback_data=f"skip_{profile_user_id}")
+    )
+    if is_tracked:
+        kb.row(InlineKeyboardButton(text="Убрать из отслеживаемых", callback_data=f"untrack_{profile_user_id}"))
+    else:
+        kb.row(InlineKeyboardButton(text="Отслеживать", callback_data=f"track_{profile_user_id}"))
+    kb.row(
+        InlineKeyboardButton(text="Отзыв", callback_data=f"comment_{profile_user_id}"),
+        InlineKeyboardButton(text="Отзывы", callback_data=f"view_comments_{profile_user_id}")
     )
     return kb
 
@@ -32,16 +40,44 @@ def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
 def format_profile_text(profile: dict) -> str:
     from bot.db import format_online_status
     from bot.handlers.registration import format_looking_for
-    gender_emoji = "👨" if profile.get('gender') == 'м' else "👩"
     online_status = format_online_status(profile.get('last_active'))
-    looking_for_text = format_looking_for(profile.get('looking_for', ''))
-    return (
-        f"{gender_emoji} Возраст: {profile['age']}\n"
-        f"📍 Город: {profile['city']}\n"
-        f"🎯 Я ищу: {looking_for_text}\n"
-        f"{online_status}\n\n"
-        f"📝 {profile['bio']}"
-    )
+    name = profile.get('name', '')
+
+    is_online = profile.get('is_online', 0)
+    if is_online:
+        status = "Онлайн сейчас"
+    else:
+        status = online_status
+
+    lines = []
+    if name:
+        lines.append(f"<b>{name}</b>")
+    lines.append(f"Возраст: {profile['age']}")
+    lines.append(f"Город: {profile['city']}")
+
+    services = profile.get('services', '')
+    if services:
+        lines.append(f"Услуги: {services}")
+
+    prices = profile.get('prices', '')
+    if prices:
+        lines.append(f"Цены: {prices}")
+
+    schedule = profile.get('schedule', '')
+    if schedule:
+        lines.append(f"График: {schedule}")
+
+    lines.append(status)
+
+    bio = profile.get('bio', '')
+    if bio and bio != 'Не указано':
+        lines.append(f"\n{bio}")
+
+    comments_count = db.get_comments_count(profile['user_id'])
+    if comments_count > 0:
+        lines.append(f"Отзывы: {comments_count}")
+
+    return "\n".join(lines)
 
 
 async def send_profile_with_photo(bot, chat_id: int, profile: dict, text: str, reply_markup=None):
@@ -157,7 +193,8 @@ async def search_for_user(user_id: int, message: Message):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    kb = get_search_keyboard(profile['user_id'])
+    is_tracked = db.is_tracking(user_id, profile['user_id'])
+    kb = get_search_keyboard(profile['user_id'], is_tracked)
 
     await send_profile_with_photo(message.bot, message.chat.id, profile, profile_text, kb.as_markup())
 
@@ -197,7 +234,8 @@ async def search_for_user_via_bot(user_id: int, bot):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    kb = get_search_keyboard(profile['user_id'])
+    is_tracked = db.is_tracking(user_id, profile['user_id'])
+    kb = get_search_keyboard(profile['user_id'], is_tracked)
 
     await send_profile_with_photo(bot, user_id, profile, profile_text, kb.as_markup())
 
@@ -293,7 +331,8 @@ async def show_next_profile(callback: CallbackQuery):
     db.increment_view_count(profile['user_id'])
     
     profile_text = format_profile_text(profile)
-    kb = get_search_keyboard(profile['user_id'])
+    is_tracked = db.is_tracking(user_id, profile['user_id'])
+    kb = get_search_keyboard(profile['user_id'], is_tracked)
 
     await send_profile_with_photo(callback.bot, user_id, profile, profile_text, kb.as_markup())
 

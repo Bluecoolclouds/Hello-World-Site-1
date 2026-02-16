@@ -114,7 +114,27 @@ class Database:
             if 'filter_max_age' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN filter_max_age INTEGER")
                 logger.info("Добавлена колонка filter_max_age")
-        
+
+            if 'is_girl' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_girl INTEGER DEFAULT 0")
+                logger.info("Добавлена колонка is_girl")
+
+            if 'services' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN services TEXT")
+                logger.info("Добавлена колонка services")
+
+            if 'prices' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN prices TEXT")
+                logger.info("Добавлена колонка prices")
+
+            if 'schedule' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN schedule TEXT")
+                logger.info("Добавлена колонка schedule")
+
+            if 'is_online' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_online INTEGER DEFAULT 0")
+                logger.info("Добавлена колонка is_online")
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS likes (
@@ -156,6 +176,23 @@ class Database:
                     stars_amount INTEGER,
                     telegram_charge_id TEXT,
                     created_at REAL DEFAULT (strftime('%s', 'now'))
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS comments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    from_user_id INTEGER,
+                    to_user_id INTEGER,
+                    text TEXT,
+                    created_at REAL DEFAULT (strftime('%s', 'now'))
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tracking (
+                    user_id INTEGER,
+                    tracked_user_id INTEGER,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    PRIMARY KEY (user_id, tracked_user_id)
                 )
             """)
 
@@ -201,7 +238,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name'}
         if field not in allowed:
             return
         if field == 'city':
@@ -573,6 +610,113 @@ class Database:
             logger.info(f"Архивировано {archived_count} неактивных пользователей")
             return archived_count
     
+    def add_tracking(self, user_id: int, tracked_user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO tracking (user_id, tracked_user_id) VALUES (?, ?)",
+                (user_id, tracked_user_id)
+            )
+
+    def remove_tracking(self, user_id: int, tracked_user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM tracking WHERE user_id = ? AND tracked_user_id = ?",
+                (user_id, tracked_user_id)
+            )
+
+    def is_tracking(self, user_id: int, tracked_user_id: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT 1 FROM tracking WHERE user_id = ? AND tracked_user_id = ?",
+                (user_id, tracked_user_id)
+            )
+            return cursor.fetchone() is not None
+
+    def get_tracked_users(self, user_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT t.tracked_user_id, t.created_at, u.age, u.city, u.bio, u.name, u.photo_id, u.media_type, u.media_ids, u.is_online, u.last_active
+                FROM tracking t
+                JOIN users u ON t.tracked_user_id = u.user_id
+                WHERE t.user_id = ?
+                ORDER BY t.created_at DESC
+            """, (user_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_followers(self, user_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT t.user_id as follower_id, t.created_at, u.age, u.city, u.username
+                FROM tracking t
+                JOIN users u ON t.user_id = u.user_id
+                WHERE t.tracked_user_id = ?
+                ORDER BY t.created_at DESC
+            """, (user_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_followers_count(self, user_id: int) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM tracking WHERE tracked_user_id = ?", (user_id,)
+            ).fetchone()[0]
+
+    def add_comment(self, from_user_id: int, to_user_id: int, text: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO comments (from_user_id, to_user_id, text) VALUES (?, ?, ?)",
+                (from_user_id, to_user_id, text)
+            )
+
+    def get_comments(self, user_id: int, limit: int = 10) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT c.id, c.from_user_id, c.text, c.created_at, u.username, u.age
+                FROM comments c
+                LEFT JOIN users u ON c.from_user_id = u.user_id
+                WHERE c.to_user_id = ?
+                ORDER BY c.created_at DESC
+                LIMIT ?
+            """, (user_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_comments_count(self, user_id: int) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM comments WHERE to_user_id = ?", (user_id,)
+            ).fetchone()[0]
+
+    def get_girl_stats(self, user_id: int) -> Dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            user = self.get_user(user_id)
+            views = user['view_count'] if user else 0
+
+            likes_received = conn.execute(
+                "SELECT COUNT(*) as count FROM likes WHERE to_user_id = ?", (user_id,)
+            ).fetchone()['count']
+
+            followers = self.get_followers_count(user_id)
+            comments = self.get_comments_count(user_id)
+
+            matches = conn.execute("""
+                SELECT COUNT(*) as count FROM matches
+                WHERE user1_id = ? OR user2_id = ?
+            """, (user_id, user_id)).fetchone()['count']
+
+            chats_active = matches
+
+            return {
+                'views': views,
+                'likes_received': likes_received,
+                'followers': followers,
+                'comments': comments,
+                'matches': matches,
+                'chats_active': chats_active
+            }
+
     def get_archive_stats(self) -> Dict:
         """Получить статистику по архивации"""
         now = time.time()
