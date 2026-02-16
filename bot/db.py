@@ -237,6 +237,28 @@ class Database:
                     added_at REAL DEFAULT (strftime('%s', 'now'))
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS bot_chats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id INTEGER NOT NULL,
+                    girl_id INTEGER NOT NULL,
+                    is_active INTEGER DEFAULT 1,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    UNIQUE(client_id, girl_id)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS bot_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chat_id INTEGER NOT NULL,
+                    sender_id INTEGER NOT NULL,
+                    text TEXT,
+                    media_type TEXT,
+                    media_id TEXT,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    FOREIGN KEY (chat_id) REFERENCES bot_chats(id)
+                )
+            """)
 
     def add_girl_whitelist(self, user_id: int):
         with sqlite3.connect(self.db_path) as conn:
@@ -821,3 +843,86 @@ class Database:
                 'online_hour': online_hour,
                 'online_day': online_day
             }
+
+    def get_or_create_bot_chat(self, client_id: int, girl_id: int) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT id FROM bot_chats WHERE client_id = ? AND girl_id = ?",
+                (client_id, girl_id)
+            ).fetchone()
+            if row:
+                conn.execute("UPDATE bot_chats SET is_active = 1 WHERE id = ?", (row[0],))
+                return row[0]
+            cursor = conn.execute(
+                "INSERT INTO bot_chats (client_id, girl_id) VALUES (?, ?)",
+                (client_id, girl_id)
+            )
+            return cursor.lastrowid
+
+    def get_bot_chat(self, chat_id: int) -> Optional[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM bot_chats WHERE id = ?", (chat_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_bot_chat_by_pair(self, client_id: int, girl_id: int) -> Optional[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM bot_chats WHERE client_id = ? AND girl_id = ?",
+                (client_id, girl_id)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def add_bot_message(self, chat_id: int, sender_id: int, text: str = None, media_type: str = None, media_id: str = None):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO bot_messages (chat_id, sender_id, text, media_type, media_id) VALUES (?, ?, ?, ?, ?)",
+                (chat_id, sender_id, text, media_type, media_id)
+            )
+
+    def get_client_chats(self, client_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT bc.*, u.name, u.age, u.city, u.is_online, u.photo_id, u.media_type as user_media_type
+                FROM bot_chats bc
+                JOIN users u ON u.user_id = bc.girl_id
+                WHERE bc.client_id = ? AND bc.is_active = 1
+                ORDER BY bc.created_at DESC
+            """, (client_id,)).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_girl_chats(self, girl_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT bc.*, u.name, u.age, u.city
+                FROM bot_chats bc
+                JOIN users u ON u.user_id = bc.client_id
+                WHERE bc.girl_id = ? AND bc.is_active = 1
+                ORDER BY bc.created_at DESC
+            """, (girl_id,)).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_bot_chat_messages(self, chat_id: int, limit: int = 20) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT * FROM bot_messages WHERE chat_id = ?
+                ORDER BY created_at DESC LIMIT ?
+            """, (chat_id, limit)).fetchall()
+            return [dict(r) for r in reversed(rows)]
+
+    def deactivate_bot_chat(self, chat_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE bot_chats SET is_active = 0 WHERE id = ?", (chat_id,))
+
+    def find_bot_chat_for_reply(self, girl_id: int, client_id: int) -> Optional[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM bot_chats WHERE girl_id = ? AND client_id = ? AND is_active = 1",
+                (girl_id, client_id)
+            ).fetchone()
+            return dict(row) if row else None

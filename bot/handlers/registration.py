@@ -259,6 +259,7 @@ def get_female_menu_keyboard() -> InlineKeyboardBuilder:
     kb.row(InlineKeyboardButton(text="Услуги", callback_data="edit_services"))
     kb.row(InlineKeyboardButton(text="Цены", callback_data="edit_prices"))
     kb.row(InlineKeyboardButton(text="График / онлайн", callback_data="edit_schedule"))
+    kb.row(InlineKeyboardButton(text="💬 Чаты с клиентами", callback_data="girl_chats"))
     kb.row(InlineKeyboardButton(text="Кто меня отслеживает / лайкнул", callback_data="my_followers"))
     kb.row(InlineKeyboardButton(text="Статистика", callback_data="girl_stats"))
     return kb
@@ -1417,6 +1418,38 @@ async def process_edit_schedule(message: Message, state: FSMContext):
     if user and user.get('is_girl'):
         kb = get_female_menu_keyboard()
         await message.answer("Главное меню", reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data == "girl_chats")
+async def girl_chats_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    chats = db.get_girl_chats(user_id)
+
+    if not chats:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await callback.message.answer(
+            "У вас пока нет сообщений от клиентов.",
+            reply_markup=kb.as_markup()
+        )
+        await callback.answer()
+        return
+
+    kb = InlineKeyboardBuilder()
+    for chat in chats[:20]:
+        client_name = chat.get('name') or 'Аноним'
+        label = f"💬 {client_name}, {chat.get('age', '?')}"
+        kb.row(InlineKeyboardButton(
+            text=label,
+            callback_data=f"openchat_{chat['id']}"
+        ))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+
+    await callback.message.answer(
+        f"💬 Сообщения от клиентов ({len(chats)}):",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "my_followers")

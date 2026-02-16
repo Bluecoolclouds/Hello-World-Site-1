@@ -22,45 +22,63 @@ HOUR_IN_SECONDS = 3600
 def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="Лайк", callback_data=f"like_{profile_user_id}"),
-        InlineKeyboardButton(text="Подарок", callback_data=f"gift_{profile_user_id}"),
-        InlineKeyboardButton(text="Пропустить", callback_data=f"skip_{profile_user_id}")
+        InlineKeyboardButton(text="📋 Услуги", callback_data=f"view_services_{profile_user_id}"),
     )
-    kb.row(InlineKeyboardButton(text="Отзывы/комментарии", callback_data=f"view_comments_{profile_user_id}"))
+    kb.row(
+        InlineKeyboardButton(text="💌 Написать", callback_data=f"like_{profile_user_id}"),
+        InlineKeyboardButton(text="⏭ Пропустить", callback_data=f"skip_{profile_user_id}")
+    )
+    kb.row(InlineKeyboardButton(text="💬 Отзывы", callback_data=f"view_comments_{profile_user_id}"))
     return kb
 
 
 def format_profile_text(profile: dict) -> str:
-    from bot.db import format_online_status
-    from bot.handlers.registration import format_looking_for
-    online_status = format_online_status(profile.get('last_active'))
-    name = profile.get('name', '')
+    from bot.handlers.registration import parse_prices, format_price_table
 
+    name = profile.get('name', '')
+    is_girl = profile.get('is_girl', 0)
     is_online = profile.get('is_online', 0)
-    if is_online:
-        status = "Онлайн сейчас"
-    else:
-        status = online_status
 
     lines = []
+
+    header_parts = []
     if name:
-        lines.append(f"<b>{name}</b>")
-    lines.append(f"Возраст: {profile['age']}")
-    lines.append(f"Город: {profile['city']}")
+        header_parts.append(f"<b>{name}</b>")
+    header_parts.append(f"{profile['age']} лет")
+    header_parts.append(f"{profile['city']}")
+    lines.append(", ".join(header_parts))
 
-    services = profile.get('services', '')
-    if services:
-        lines.append(f"Услуги: {services}")
+    if is_girl:
+        stats = []
+        breast = profile.get('breast', '')
+        if breast:
+            stats.append(f"грудь {breast}")
+        height = profile.get('height')
+        if height:
+            stats.append(f"рост {height}")
+        weight = profile.get('weight')
+        if weight:
+            stats.append(f"вес {weight}")
+        if stats:
+            lines.append(" / ".join(stats))
 
-    prices = profile.get('prices', '')
-    if prices:
-        lines.append(f"Цены: {prices}")
+    if is_online:
+        lines.append("🟢 Онлайн")
 
-    schedule = profile.get('schedule', '')
-    if schedule:
-        lines.append(f"График: {schedule}")
-
-    lines.append(status)
+    prices_data = parse_prices(profile.get('prices', ''))
+    if prices_data:
+        def val(key):
+            v = prices_data.get(key, '')
+            return str(v) if v else '-'
+        price_parts = []
+        if prices_data.get('home_1h'):
+            price_parts.append(f"1ч {val('home_1h')}")
+        if prices_data.get('home_2h'):
+            price_parts.append(f"2ч {val('home_2h')}")
+        if prices_data.get('home_night'):
+            price_parts.append(f"ночь {val('home_night')}")
+        if price_parts:
+            lines.append(f"💰 {' / '.join(price_parts)}")
 
     bio = profile.get('bio', '')
     if bio and bio != 'Не указано':
@@ -68,7 +86,7 @@ def format_profile_text(profile: dict) -> str:
 
     comments_count = db.get_comments_count(profile['user_id'])
     if comments_count > 0:
-        lines.append(f"Отзывы: {comments_count}")
+        lines.append(f"\n💬 Отзывов: {comments_count}")
 
     return "\n".join(lines)
 
@@ -239,19 +257,15 @@ async def cmd_search(message: Message):
 
 @router.callback_query(F.data.regexp(r"^like_\d+$"))
 async def handle_like(callback: CallbackQuery):
+    from bot.handlers.chats import start_chat_with_girl
     to_id = int(callback.data.split("_")[1])
     from_id = callback.from_user.id
-    
-    is_match = db.add_like(from_id, to_id)
+
+    db.add_like(from_id, to_id)
     db.add_tracking(from_id, to_id)
-    
-    if is_match:
-        db.create_match(from_id, to_id)
-        await check_and_notify_match(callback, from_id, to_id)
-    else:
-        await callback.answer("Лайк отправлен!")
-        await notify_new_like(callback.bot, to_id, from_id)
-    
+
+    await start_chat_with_girl(callback.bot, from_id, to_id)
+    await callback.answer("Чат создан!")
     await show_next_profile(callback)
 
 
@@ -279,6 +293,57 @@ async def handle_skip(callback: CallbackQuery):
     db.add_skip(from_id, skipped_id)
     await callback.answer("⏭ Пропущено")
     await show_next_profile(callback)
+
+
+@router.callback_query(F.data.regexp(r"^view_services_\d+$"))
+async def handle_view_services(callback: CallbackQuery):
+    from bot.handlers.registration import parse_services, format_services_list, parse_prices, format_price_table
+    girl_id = int(callback.data.split("_")[2])
+    girl = db.get_user(girl_id)
+    if not girl:
+        await callback.answer("Профиль не найден")
+        return
+
+    lines = []
+    name = girl.get('name', '')
+    if name:
+        lines.append(f"<b>{name}</b> — услуги и цены\n")
+    else:
+        lines.append("<b>Услуги и цены</b>\n")
+
+    services_list = parse_services(girl.get('services', ''))
+    services_text = format_services_list(services_list)
+    if services_text:
+        lines.append(services_text)
+    else:
+        lines.append("Услуги не указаны")
+
+    prices_data = parse_prices(girl.get('prices', ''))
+    if prices_data:
+        lines.append("")
+        lines.append(format_price_table(prices_data))
+
+    schedule = girl.get('schedule', '')
+    if schedule:
+        lines.append(f"\n📅 {schedule}")
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_profile_{girl_id}"))
+    await callback.message.answer("\n".join(lines), reply_markup=kb.as_markup(), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^back_to_profile_\d+$"))
+async def handle_back_to_profile(callback: CallbackQuery):
+    girl_id = int(callback.data.split("_")[3])
+    profile = db.get_user(girl_id)
+    if not profile:
+        await callback.answer("Профиль не найден")
+        return
+    profile_text = format_profile_text(profile)
+    kb = get_search_keyboard(profile['user_id'])
+    await send_profile_with_photo(callback.bot, callback.from_user.id, profile, profile_text, kb.as_markup())
+    await callback.answer()
 
 
 async def show_next_profile(callback: CallbackQuery):

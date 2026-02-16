@@ -51,3 +51,7 @@ class GirlMediaUpload(StatesGroup):
 
 class PriceEdit(StatesGroup):
     field = State()
+
+
+class ChatReply(StatesGroup):
+    waiting_message = State()

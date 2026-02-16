@@ -81,6 +81,11 @@ The `bot/` directory contains a fully functional Telegram dating bot built with 
 - Like/Skip with match notifications
 - Block/unblock users
 - Admin: stats, ban, unban, broadcast, add girl profiles
+- In-bot relay chat: client messages forwarded to girl anonymously, girl replies forwarded back
+- bot_chats and bot_messages tables for relay messaging
+- Chat created automatically on "Написать" (like) action
+- Girls see "Чаты с клиентами" in their menu
+- Profile card redesigned: compact header (name/age/city), body stats, price summary, online badge, emoji buttons (Услуги, Написать, Пропустить, Отзывы)
 
 **Environment variables:**
 - `BOT_TOKEN` - Telegram bot token from @BotFather
