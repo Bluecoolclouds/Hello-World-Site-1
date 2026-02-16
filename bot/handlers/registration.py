@@ -214,7 +214,6 @@ def get_services_categories_keyboard(services: list) -> InlineKeyboardBuilder:
         total = len(cat['items'])
         label = f"{cat['name']} ({count}/{total})"
         kb.row(InlineKeyboardButton(text=label, callback_data=f"svc_cat_{cat_id}"))
-    kb.row(InlineKeyboardButton(text="Цены", callback_data="edit_prices"))
     kb.row(InlineKeyboardButton(text="Готово", callback_data="back_to_main"))
     return kb
 
@@ -256,7 +255,8 @@ def get_female_menu_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Настроить / редактировать профиль", callback_data="edit_profile"))
     kb.row(InlineKeyboardButton(text="Мои фото/видео", callback_data="edit_photo"))
-    kb.row(InlineKeyboardButton(text="Услуги и цены", callback_data="edit_services"))
+    kb.row(InlineKeyboardButton(text="Услуги", callback_data="edit_services"))
+    kb.row(InlineKeyboardButton(text="Цены", callback_data="edit_prices"))
     kb.row(InlineKeyboardButton(text="График / онлайн", callback_data="edit_schedule"))
     kb.row(InlineKeyboardButton(text="Кто меня отслеживает / лайкнул", callback_data="my_followers"))
     kb.row(InlineKeyboardButton(text="Статистика", callback_data="girl_stats"))
@@ -1328,13 +1328,8 @@ async def price_done(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("Цены сохранены!")
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
-        services = parse_services(user.get('services', ''))
-        count = len(services)
-        kb = get_services_categories_keyboard(services)
-        await callback.message.answer(
-            f"<b>Услуги и цены</b>\n\nВыбрано услуг: {count}\nВыберите категорию для редактирования:",
-            reply_markup=kb.as_markup()
-        )
+        kb = get_female_menu_keyboard()
+        await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
     await callback.answer()
 
 
