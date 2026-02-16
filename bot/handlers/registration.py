@@ -248,6 +248,7 @@ def get_male_inline_keyboard() -> InlineKeyboardBuilder:
         InlineKeyboardButton(text="Девушки", callback_data="start_search"),
         InlineKeyboardButton(text="Фильтры", callback_data="open_filters")
     )
+    kb.row(InlineKeyboardButton(text="Оценить заново", callback_data="reset_ratings"))
     return kb
 
 
@@ -480,6 +481,13 @@ async def cmd_start(message: Message, state: FSMContext):
             "Выберите действие:",
             reply_markup=kb.as_markup()
         )
+
+
+@router.callback_query(F.data == "reset_ratings")
+async def reset_ratings_callback(callback: CallbackQuery, state: FSMContext):
+    db.reset_ratings(callback.from_user.id)
+    await callback.message.answer("Все оценки сброшены! Анкеты можно просматривать заново.")
+    await callback.answer()
 
 
 @router.callback_query(F.data == "back_to_main")
