@@ -72,6 +72,163 @@ def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
     return kb
 
 
+SERVICES_CATALOG = {
+    'sex': {
+        'name': 'Секс',
+        'items': [
+            'Секс классический',
+            'Секс анальный',
+            'Секс групповой',
+            'Услуги семейной паре',
+        ]
+    },
+    'oral': {
+        'name': 'Доп',
+        'items': [
+            'Минет в презервативе',
+            'Минет без резинки',
+            'Минет глубокий',
+            'Минет в машине',
+            'Горловой Минет',
+            'Куннилингус',
+            'Поцелуи',
+            'Игрушки',
+            'Окончание на грудь',
+            'Окончание на лицо',
+            'Окончание в рот',
+            'Глотаю',
+            'Сквирт',
+        ]
+    },
+    'strip': {
+        'name': 'Стриптиз',
+        'items': [
+            'Стриптиз профи',
+            'Стриптиз не профи',
+        ]
+    },
+    'other': {
+        'name': 'Разное',
+        'items': [
+            'Ролевые игры',
+            'Фото/видео съемка',
+            'Эскорт',
+            'Виртуальный секс',
+        ]
+    },
+    'video': {
+        'name': 'Видео звонок',
+        'items': [
+            'Секс по телефону',
+        ]
+    },
+    'massage': {
+        'name': 'Массаж',
+        'items': [
+            'Классический',
+            'Профессиональный',
+            'Расслабляющий',
+            'Урологический',
+            'Эротический',
+            'Лингам',
+            'Карсай',
+            'Массажный стол',
+        ]
+    },
+    'extreme': {
+        'name': 'Экстрим',
+        'items': [
+            'Страпон',
+        ]
+    },
+    'request': {
+        'name': 'По запросу',
+        'items': [
+            'Анилингус вам',
+            'Анилингус мне',
+            'Золот. дождь выдача',
+            'Золотой дождь прием',
+            'Копро вам',
+            'Фистинг анальный вам',
+            'Фистинг анальный мне',
+            'Фистинг классический',
+            'Фингеринг',
+        ]
+    },
+    'bdsm': {
+        'name': 'Садо-мазо',
+        'items': [
+            'Бандаж',
+            'Госпожа',
+            'Игры',
+            'Легкая доминация',
+            'Порка',
+            'Рабыня',
+            'Фетиш',
+            'Футфетиш',
+            'Трамплинг',
+            'Клизма',
+            'Легкая рабыня',
+            'Боллбастинг',
+            'Феминизация',
+            'Оборудованная студия',
+        ]
+    },
+}
+
+
+def parse_services(services_str: str) -> list:
+    if not services_str:
+        return []
+    try:
+        data = json.loads(services_str)
+        if isinstance(data, list):
+            return data
+        return []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def format_services_list(services: list) -> str:
+    if not services:
+        return ""
+    by_cat = {}
+    for cat_id, cat in SERVICES_CATALOG.items():
+        matched = [s for s in cat['items'] if s in services]
+        if matched:
+            by_cat[cat['name']] = matched
+    if not by_cat:
+        return ""
+    lines = ["<b>Услуги:</b>"]
+    for cat_name, items in by_cat.items():
+        lines.append(f"  <i>{cat_name}:</i> {', '.join(items)}")
+    return "\n".join(lines)
+
+
+def get_services_categories_keyboard(services: list) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for cat_id, cat in SERVICES_CATALOG.items():
+        count = len([s for s in cat['items'] if s in services])
+        total = len(cat['items'])
+        label = f"{cat['name']} ({count}/{total})"
+        kb.row(InlineKeyboardButton(text=label, callback_data=f"svc_cat_{cat_id}"))
+    kb.row(InlineKeyboardButton(text="Цены", callback_data="edit_prices"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data="back_to_main"))
+    return kb
+
+
+def get_services_category_keyboard(cat_id: str, services: list) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    cat = SERVICES_CATALOG.get(cat_id)
+    if not cat:
+        return kb
+    for item in cat['items']:
+        check = "+" if item in services else "-"
+        kb.row(InlineKeyboardButton(text=f"{check} {item}", callback_data=f"svc_toggle_{cat_id}_{item}"))
+    kb.row(InlineKeyboardButton(text="Назад к категориям", callback_data="svc_back_cats"))
+    return kb
+
+
 LOOKING_FOR_OPTIONS = {
     'all_now': 'Все и сразу',
     'no_strings': 'Без обязательств',
@@ -175,6 +332,13 @@ def format_profile(user: dict) -> str:
 
     if bio and bio != "Не указано" and bio != "":
         lines.append(f"О себе: {bio}")
+
+    if is_girl:
+        services_list = parse_services(user.get('services', ''))
+        services_text = format_services_list(services_list)
+        if services_text:
+            lines.append("")
+            lines.append(services_text)
 
     prices_data = parse_prices(user.get('prices', ''))
     if prices_data:
@@ -960,13 +1124,94 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "edit_services")
 async def edit_services_callback(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(callback.from_user.id)
+    services = parse_services(user.get('services', '')) if user else []
+    count = len(services)
+
+    kb = get_services_categories_keyboard(services)
+    await callback.message.answer(
+        f"<b>Услуги и цены</b>\n\nВыбрано услуг: {count}\nВыберите категорию для редактирования:",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_prices")
+async def edit_prices_callback(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
     prices = parse_prices(user.get('prices', '')) if user else {}
 
     table_text = format_price_table(prices, for_pre=True)
-    text = f"<b>Услуги и цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить значение:"
+    text = f"<b>Цены</b>\n\n<pre>{table_text}</pre>\n\nНажмите на поле, чтобы изменить значение:"
 
     kb = get_prices_keyboard(prices)
     await callback.message.answer(text, reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("svc_cat_"))
+async def svc_category_view(callback: CallbackQuery, state: FSMContext):
+    cat_id = callback.data.replace("svc_cat_", "")
+    if cat_id not in SERVICES_CATALOG:
+        await callback.answer("Категория не найдена")
+        return
+
+    user = db.get_user(callback.from_user.id)
+    services = parse_services(user.get('services', '')) if user else []
+    cat = SERVICES_CATALOG[cat_id]
+
+    kb = get_services_category_keyboard(cat_id, services)
+    await callback.message.answer(
+        f"<b>{cat['name']}</b>\n\nНажмите, чтобы включить/выключить:",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("svc_toggle_"))
+async def svc_toggle_item(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.replace("svc_toggle_", "").split("_", 1)
+    if len(parts) != 2:
+        await callback.answer()
+        return
+    cat_id, item_name = parts
+    if cat_id not in SERVICES_CATALOG:
+        await callback.answer()
+        return
+
+    user = db.get_user(callback.from_user.id)
+    services = parse_services(user.get('services', '')) if user else []
+
+    if item_name in services:
+        services.remove(item_name)
+    else:
+        services.append(item_name)
+
+    db.update_user_field(callback.from_user.id, 'services', json.dumps(services))
+
+    cat = SERVICES_CATALOG[cat_id]
+    kb = get_services_category_keyboard(cat_id, services)
+    try:
+        await callback.message.edit_text(
+            f"<b>{cat['name']}</b>\n\nНажмите, чтобы включить/выключить:",
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+    await callback.answer()
+
+
+@router.callback_query(F.data == "svc_back_cats")
+async def svc_back_to_categories(callback: CallbackQuery, state: FSMContext):
+    user = db.get_user(callback.from_user.id)
+    services = parse_services(user.get('services', '')) if user else []
+    count = len(services)
+
+    kb = get_services_categories_keyboard(services)
+    await callback.message.answer(
+        f"<b>Услуги и цены</b>\n\nВыбрано услуг: {count}\nВыберите категорию для редактирования:",
+        reply_markup=kb.as_markup()
+    )
     await callback.answer()
 
 
@@ -1076,8 +1321,13 @@ async def price_done(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("Цены сохранены!")
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
-        kb = get_female_menu_keyboard()
-        await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
+        services = parse_services(user.get('services', ''))
+        count = len(services)
+        kb = get_services_categories_keyboard(services)
+        await callback.message.answer(
+            f"<b>Услуги и цены</b>\n\nВыбрано услуг: {count}\nВыберите категорию для редактирования:",
+            reply_markup=kb.as_markup()
+        )
     await callback.answer()
 
 
