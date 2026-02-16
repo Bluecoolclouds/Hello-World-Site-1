@@ -226,6 +226,10 @@ class Database:
                         strftime('%s', 'now'), 0, strftime('%s', 'now'), ?)
             """, (user_id, username, age, city, bio, photo_id, media_type, name))
 
+    def delete_user(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+
     def create_male_user(self, user_id: int, username: str = None):
         with sqlite3.connect(self.db_path) as conn:
             existing = conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone()

@@ -184,6 +184,16 @@ async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
     user = db.get_user(user_id)
 
+    if db.is_girl_whitelisted(user_id) and (not user or not user.get('is_girl')):
+        if user:
+            db.delete_user(user_id)
+        await state.set_state(GirlRegistration.name)
+        await message.answer(
+            "<b>Создание анкеты</b>\n\n"
+            "Введите ваше имя:"
+        )
+        return
+
     if user:
         if db.is_banned(user_id):
             await message.answer("Ваш аккаунт заблокирован.")
@@ -210,23 +220,16 @@ async def cmd_start(message: Message, state: FSMContext):
                 reply_markup=kb.as_markup()
             )
     else:
-        if db.is_girl_whitelisted(user_id):
-            await state.set_state(GirlRegistration.name)
-            await message.answer(
-                "<b>Создание анкеты</b>\n\n"
-                "Введите ваше имя:"
-            )
-        else:
-            db.create_male_user(user_id, message.from_user.username)
-            kb = get_male_inline_keyboard()
-            await message.answer(
-                "<b>Добро пожаловать!</b>",
-                reply_markup=get_male_reply_keyboard()
-            )
-            await message.answer(
-                "Выберите действие:",
-                reply_markup=kb.as_markup()
-            )
+        db.create_male_user(user_id, message.from_user.username)
+        kb = get_male_inline_keyboard()
+        await message.answer(
+            "<b>Добро пожаловать!</b>",
+            reply_markup=get_male_reply_keyboard()
+        )
+        await message.answer(
+            "Выберите действие:",
+            reply_markup=kb.as_markup()
+        )
 
 
 @router.callback_query(F.data == "back_to_main")
