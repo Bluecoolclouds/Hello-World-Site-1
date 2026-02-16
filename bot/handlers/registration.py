@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration, PriceEdit
+from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration, PriceEdit, GirlMediaUpload
 from bot.keyboards.keyboards import get_main_menu, get_male_reply_keyboard
 from bot.db import Database, format_online_status
 
@@ -18,8 +18,10 @@ ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 PRICE_FIELDS = {
     'home_1h': 'У меня 1 час',
     'home_2h': 'У меня 2 часа',
+    'home_night': 'У меня ночь',
     'out_1h': 'Выезд 1 час',
     'out_2h': 'Выезд 2 часа',
+    'out_night': 'Выезд ночь',
     'contacts_hour': 'Контактов в час',
     'prepay': 'Предоплата',
 }
@@ -45,9 +47,9 @@ def format_price_table(prices: dict, for_pre: bool = False) -> str:
     lines = []
     if not for_pre:
         lines.append("<b>Цены:</b>")
-    lines.append(f"         {'1 час':>8} {'2 часа':>8}")
-    lines.append(f"У меня  {val('home_1h'):>8} {val('home_2h'):>8}")
-    lines.append(f"Выезд   {val('out_1h'):>8} {val('out_2h'):>8}")
+    lines.append(f"         {'1 час':>8} {'2 часа':>8} {'ночь':>8}")
+    lines.append(f"У меня  {val('home_1h'):>8} {val('home_2h'):>8} {val('home_night'):>8}")
+    lines.append(f"Выезд   {val('out_1h'):>8} {val('out_2h'):>8} {val('out_night'):>8}")
     lines.append(f"\nКонтактов в час: {val('contacts_hour')}")
     lines.append(f"Предоплата: {val('prepay')}")
 
@@ -63,9 +65,9 @@ def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
         return InlineKeyboardButton(text=f"{label}: {display}", callback_data=f"price_set_{key}")
 
     kb.row(InlineKeyboardButton(text="--- У меня ---", callback_data="price_noop"))
-    kb.row(btn('home_1h', '1 час'), btn('home_2h', '2 часа'))
+    kb.row(btn('home_1h', '1 час'), btn('home_2h', '2 часа'), btn('home_night', 'Ночь'))
     kb.row(InlineKeyboardButton(text="--- Выезд ---", callback_data="price_noop"))
-    kb.row(btn('out_1h', '1 час'), btn('out_2h', '2 часа'))
+    kb.row(btn('out_1h', '1 час'), btn('out_2h', '2 часа'), btn('out_night', 'Ночь'))
     kb.row(InlineKeyboardButton(text="--- Прочее ---", callback_data="price_noop"))
     kb.row(btn('contacts_hour', 'Контактов/час'), btn('prepay', 'Предоплата'))
     kb.row(InlineKeyboardButton(text="Готово", callback_data="price_done"))
@@ -1527,16 +1529,177 @@ def get_skip_photo_keyboard() -> InlineKeyboardBuilder:
     return kb
 
 
+def get_girl_media_keyboard(count: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    if count > 0:
+        kb.row(InlineKeyboardButton(text=f"Готово ({count}/5)", callback_data="girl_media_done"))
+        kb.row(InlineKeyboardButton(text="Заполнить заново", callback_data="girl_media_reset"))
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="girl_media_cancel"))
+    return kb
+
+
 @router.callback_query(F.data == "edit_photo")
 async def edit_photo_callback(callback: CallbackQuery, state: FSMContext):
-    await state.update_data(editing=True)
-    await state.set_state(Registration.photo)
+    user = db.get_user(callback.from_user.id)
+    if user and user.get('is_girl'):
+        media_ids_raw = user.get('media_ids', '')
+        existing = []
+        if media_ids_raw:
+            try:
+                existing = json.loads(media_ids_raw)
+                if not isinstance(existing, list):
+                    existing = []
+            except (json.JSONDecodeError, TypeError):
+                existing = []
+        count = len(existing)
+        await state.set_state(GirlMediaUpload.collecting)
+        await state.update_data(media_items=existing)
+        kb = get_girl_media_keyboard(count)
+        await callback.message.answer(
+            f"<b>Фото/видео анкеты</b>\n\n"
+            f"Загружено: {count}/5\n"
+            f"Отправьте фото или видео (до 15 сек). Максимум 5 материалов.",
+            reply_markup=kb.as_markup()
+        )
+    else:
+        await state.update_data(editing=True)
+        await state.set_state(Registration.photo)
+        kb = get_skip_photo_keyboard()
+        await callback.message.answer(
+            "Пришли новое фото или видео (до 15 сек):",
+            reply_markup=kb.as_markup()
+        )
+    await callback.answer()
 
-    kb = get_skip_photo_keyboard()
-    await callback.message.answer(
-        "Пришли новое фото или видео (до 15 сек):",
+
+@router.message(GirlMediaUpload.collecting, F.photo)
+async def girl_media_photo(message: Message, state: FSMContext):
+    data = await state.get_data()
+    items = data.get('media_items', [])
+    if len(items) >= 5:
+        await message.answer("Максимум 5 материалов. Нажмите 'Готово' или 'Заполнить заново'.")
+        return
+    photo_id = message.photo[-1].file_id
+    items.append({"id": photo_id, "type": "photo"})
+    await state.update_data(media_items=items)
+    kb = get_girl_media_keyboard(len(items))
+    remaining = 5 - len(items)
+    if remaining > 0:
+        await message.answer(
+            f"Добавлено! ({len(items)}/5). Можно ещё {remaining}.",
+            reply_markup=kb.as_markup()
+        )
+    else:
+        await message.answer(
+            f"Загружено 5/5 — максимум. Нажмите 'Готово' для сохранения.",
+            reply_markup=kb.as_markup()
+        )
+
+
+@router.message(GirlMediaUpload.collecting, F.video)
+async def girl_media_video(message: Message, state: FSMContext):
+    if message.video.duration > 15:
+        await message.answer("Видео должно быть не длиннее 15 секунд. Попробуйте ещё раз.")
+        return
+    data = await state.get_data()
+    items = data.get('media_items', [])
+    if len(items) >= 5:
+        await message.answer("Максимум 5 материалов. Нажмите 'Готово' или 'Заполнить заново'.")
+        return
+    video_id = message.video.file_id
+    items.append({"id": video_id, "type": "video"})
+    await state.update_data(media_items=items)
+    kb = get_girl_media_keyboard(len(items))
+    remaining = 5 - len(items)
+    if remaining > 0:
+        await message.answer(
+            f"Добавлено! ({len(items)}/5). Можно ещё {remaining}.",
+            reply_markup=kb.as_markup()
+        )
+    else:
+        await message.answer(
+            f"Загружено 5/5 — максимум. Нажмите 'Готово' для сохранения.",
+            reply_markup=kb.as_markup()
+        )
+
+
+@router.message(GirlMediaUpload.collecting, F.video_note)
+async def girl_media_video_note(message: Message, state: FSMContext):
+    data = await state.get_data()
+    items = data.get('media_items', [])
+    if len(items) >= 5:
+        await message.answer("Максимум 5 материалов. Нажмите 'Готово' или 'Заполнить заново'.")
+        return
+    vid_id = message.video_note.file_id
+    items.append({"id": vid_id, "type": "video_note"})
+    await state.update_data(media_items=items)
+    kb = get_girl_media_keyboard(len(items))
+    remaining = 5 - len(items)
+    if remaining > 0:
+        await message.answer(
+            f"Добавлено! ({len(items)}/5). Можно ещё {remaining}.",
+            reply_markup=kb.as_markup()
+        )
+    else:
+        await message.answer(
+            f"Загружено 5/5 — максимум. Нажмите 'Готово' для сохранения.",
+            reply_markup=kb.as_markup()
+        )
+
+
+@router.message(GirlMediaUpload.collecting)
+async def girl_media_invalid(message: Message, state: FSMContext):
+    data = await state.get_data()
+    items = data.get('media_items', [])
+    kb = get_girl_media_keyboard(len(items))
+    await message.answer(
+        "Отправьте фото или видео (до 15 сек).",
         reply_markup=kb.as_markup()
     )
+
+
+@router.callback_query(F.data == "girl_media_done")
+async def girl_media_done(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    items = data.get('media_items', [])
+    if not items:
+        await callback.answer("Нет загруженных материалов")
+        return
+    valid_items = [i for i in items if isinstance(i, dict) and 'id' in i and 'type' in i]
+    db.update_user_field(callback.from_user.id, 'media_ids', json.dumps(valid_items))
+    if valid_items:
+        db.update_user_field(callback.from_user.id, 'photo_id', valid_items[0]['id'])
+        db.update_user_field(callback.from_user.id, 'media_type', valid_items[0]['type'])
+    await state.clear()
+    await callback.message.answer(f"Сохранено {len(valid_items)} материал(ов)!")
+    await show_updated_profile(callback.message.bot, callback.from_user.id)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "girl_media_reset")
+async def girl_media_reset(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(media_items=[])
+    db.update_user_field(callback.from_user.id, 'media_ids', '[]')
+    db.update_user_field(callback.from_user.id, 'photo_id', '')
+    db.update_user_field(callback.from_user.id, 'media_type', '')
+    kb = get_girl_media_keyboard(0)
+    await callback.message.answer(
+        "<b>Фото/видео анкеты</b>\n\n"
+        "Все материалы очищены. Загружено: 0/5\n"
+        "Отправьте фото или видео (до 15 сек).",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "girl_media_cancel")
+async def girl_media_cancel(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.answer("Редактирование медиа отменено.")
+    user = db.get_user(callback.from_user.id)
+    if user and user.get('is_girl'):
+        kb = get_female_menu_keyboard()
+        await callback.message.answer("Главное меню", reply_markup=kb.as_markup())
     await callback.answer()
 
 

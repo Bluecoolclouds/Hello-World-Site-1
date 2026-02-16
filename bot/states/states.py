@@ -45,5 +45,9 @@ class GirlRegistration(StatesGroup):
     photo = State()
 
 
+class GirlMediaUpload(StatesGroup):
+    collecting = State()
+
+
 class PriceEdit(StatesGroup):
     field = State()
