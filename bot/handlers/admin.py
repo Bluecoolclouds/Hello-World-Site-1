@@ -795,9 +795,72 @@ async def process_gedit_bio(message: Message, state: FSMContext):
     await message.answer("Что дальше?", reply_markup=kb.as_markup())
 
 
+def _get_media_list(girl: dict) -> list:
+    raw = girl.get('media_ids')
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    photo_id = girl.get('photo_id')
+    if photo_id:
+        return [{"id": photo_id, "type": girl.get('media_type', 'photo')}]
+    return []
+
+
+def _save_media_list(girl_id: int, media_list: list):
+    if media_list:
+        db.update_user_field(girl_id, 'media_ids', json.dumps(media_list))
+        db.update_user_field(girl_id, 'photo_id', media_list[0]["id"])
+        db.update_user_field(girl_id, 'media_type', media_list[0]["type"])
+    else:
+        db.update_user_field(girl_id, 'media_ids', None)
+        db.update_user_field(girl_id, 'photo_id', None)
+        db.update_user_field(girl_id, 'media_type', None)
+
+
+def _media_manage_kb(girl_id: int, count: int) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    if count < 10:
+        kb.row(InlineKeyboardButton(text="Добавить фото/видео", callback_data=f"gadd_media_{girl_id}"))
+    if count > 0:
+        kb.row(InlineKeyboardButton(text="Удалить все", callback_data=f"gdel_media_{girl_id}"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data=f"mgirl_{girl_id}"))
+    return kb
+
+
 @router.callback_query(F.data.regexp(r"^gedit_photo_\d+$"))
 async def gedit_photo(callback: CallbackQuery, state: FSMContext):
     girl_id = int(callback.data.split("_")[2])
+    girl = db.get_user(girl_id)
+    if not girl or girl.get('managed_by') != callback.from_user.id:
+        await callback.answer("Нет доступа")
+        return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    media_list = _get_media_list(girl)
+    count = len(media_list)
+    kb = _media_manage_kb(girl_id, count)
+    await callback.message.answer(
+        f"Медиа: {count}/10\n\nВыберите действие:",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^gadd_media_\d+$"))
+async def gadd_media(callback: CallbackQuery, state: FSMContext):
+    girl_id = int(callback.data.split("_")[2])
+    girl = db.get_user(girl_id)
+    if not girl or girl.get('managed_by') != callback.from_user.id:
+        await callback.answer("Нет доступа")
+        return
+    media_list = _get_media_list(girl)
+    if len(media_list) >= 10:
+        await callback.answer("Достигнут лимит 10 медиа")
+        return
     await state.set_state(GirlEditStates.photo)
     await state.update_data(managing_girl_id=girl_id)
     try:
@@ -805,10 +868,49 @@ async def gedit_photo(callback: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Отмена", callback_data=f"mgirl_{girl_id}"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data=f"gmedia_done_{girl_id}"))
     await callback.message.answer(
-        "Отправьте фото или видео для анкеты.\n"
-        "Можно отправить до 5 медиафайлов.",
+        f"Медиа: {len(media_list)}/10\n\n"
+        "Отправьте фото или видео. Каждый файл будет добавлен к анкете.",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^gdel_media_\d+$"))
+async def gdel_media(callback: CallbackQuery, state: FSMContext):
+    girl_id = int(callback.data.split("_")[2])
+    girl = db.get_user(girl_id)
+    if not girl or girl.get('managed_by') != callback.from_user.id:
+        await callback.answer("Нет доступа")
+        return
+    _save_media_list(girl_id, [])
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    kb = _media_manage_kb(girl_id, 0)
+    await callback.message.answer(
+        "Все медиа удалены.\n\nМедиа: 0/10",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.regexp(r"^gmedia_done_\d+$"))
+async def gmedia_done(callback: CallbackQuery, state: FSMContext):
+    girl_id = int(callback.data.split("_")[2])
+    await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    girl = db.get_user(girl_id)
+    count = len(_get_media_list(girl)) if girl else 0
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="⬅️ К анкете", callback_data=f"mgirl_{girl_id}"))
+    await callback.message.answer(
+        f"Медиа сохранены! Всего: {count}/10",
         reply_markup=kb.as_markup()
     )
     await callback.answer()
@@ -823,14 +925,21 @@ async def process_gedit_photo(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("Нет доступа.")
         return
-    photo_id = message.photo[-1].file_id
-    db.update_user_field(girl_id, 'photo_id', photo_id)
-    db.update_user_field(girl_id, 'media_type', 'photo')
-    await state.clear()
-    await message.answer("Фото анкеты обновлено!")
+    media_list = _get_media_list(girl)
+    if len(media_list) >= 10:
+        await message.answer("Достигнут лимит 10 медиа. Нажмите Готово.")
+        return
+    media_list.append({"id": message.photo[-1].file_id, "type": "photo"})
+    _save_media_list(girl_id, media_list)
+    count = len(media_list)
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="⬅️ К анкете", callback_data=f"mgirl_{girl_id}"))
-    await message.answer("Что дальше?", reply_markup=kb.as_markup())
+    if count < 10:
+        kb.row(InlineKeyboardButton(text="Добавить ещё", callback_data=f"gadd_media_{girl_id}"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data=f"gmedia_done_{girl_id}"))
+    await message.answer(
+        f"Фото добавлено! Медиа: {count}/10",
+        reply_markup=kb.as_markup()
+    )
 
 
 @router.message(GirlEditStates.photo, F.video)
@@ -842,14 +951,21 @@ async def process_gedit_video(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("Нет доступа.")
         return
-    video_id = message.video.file_id
-    db.update_user_field(girl_id, 'photo_id', video_id)
-    db.update_user_field(girl_id, 'media_type', 'video')
-    await state.clear()
-    await message.answer("Видео анкеты обновлено!")
+    media_list = _get_media_list(girl)
+    if len(media_list) >= 10:
+        await message.answer("Достигнут лимит 10 медиа. Нажмите Готово.")
+        return
+    media_list.append({"id": message.video.file_id, "type": "video"})
+    _save_media_list(girl_id, media_list)
+    count = len(media_list)
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="⬅️ К анкете", callback_data=f"mgirl_{girl_id}"))
-    await message.answer("Что дальше?", reply_markup=kb.as_markup())
+    if count < 10:
+        kb.row(InlineKeyboardButton(text="Добавить ещё", callback_data=f"gadd_media_{girl_id}"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data=f"gmedia_done_{girl_id}"))
+    await message.answer(
+        f"Видео добавлено! Медиа: {count}/10",
+        reply_markup=kb.as_markup()
+    )
 
 
 @router.callback_query(F.data.regexp(r"^gedit_services_\d+$"))

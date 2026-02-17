@@ -132,6 +132,14 @@ The pattern uses typed route definitions that can be consumed by both frontend h
 - **esbuild** - Production bundling for server
 - **drizzle-kit** - Database migration tooling
 
+### Docker Deployment
+- **Dockerfile** - Multi-stage build: Node.js builder + Python venv, production image with both runtimes
+- **docker-compose.yml** - Three services: app (Node+Bot), db (PostgreSQL 16), nginx (reverse proxy)
+- **nginx.conf** - Reverse proxy config, replace `your-domain.com` with actual domain
+- **.env.example** - Template for all required environment variables
+- **.dockerignore** - Excludes node_modules, dist, .git, databases, Python caches
+- **bot/requirements.txt** - Python dependencies: aiogram, aiohttp, aiofiles, python-dotenv
+
 ### Replit-Specific
 - **@replit/vite-plugin-runtime-error-modal** - Error overlay
 - **@replit/vite-plugin-cartographer** - Dev tooling (development only)
