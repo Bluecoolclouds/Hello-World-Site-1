@@ -37,4 +37,10 @@ class ActivityMiddleware(BaseMiddleware):
             except Exception as e:
                 logger.error(f"Ошибка в ActivityMiddleware: {e}")
         
-        return await handler(event, data)
+        if isinstance(event, Message):
+            logger.info(f"[MSG] user={event.from_user.id} text={event.text!r} state={data.get('raw_state')}")
+        elif isinstance(event, CallbackQuery):
+            logger.info(f"[CB] user={event.from_user.id} data={event.data!r}")
+        
+        result = await handler(event, data)
+        return result
