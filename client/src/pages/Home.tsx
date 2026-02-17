@@ -31,6 +31,19 @@ interface BotStats {
   onlineNow: number;
 }
 
+interface TopGirl {
+  id: number;
+  name: string;
+  age: number;
+  city: string;
+  bio: string;
+  isOnline: boolean;
+  height: number | null;
+  weight: number | null;
+  breast: string | null;
+  hasPhoto: boolean;
+}
+
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
   useEffect(() => {
@@ -219,6 +232,10 @@ export default function Home() {
     queryKey: ["/api/bot-stats"],
   });
 
+  const { data: topGirls } = useQuery<TopGirl[]>({
+    queryKey: ["/api/top-girls"],
+  });
+
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
@@ -331,6 +348,82 @@ export default function Home() {
             />
             <AnimatedCounter target={stats.totalGirls + 10} label="Проверенных анкет" />
             <AnimatedCounter target={stats.onlineNow} label="Девушек онлайн" />
+          </div>
+        </section>
+      )}
+
+      {topGirls && topGirls.length > 0 && (
+        <section className="py-20" aria-label="Топ девушек сегодня">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center mb-14">
+              <Badge variant="secondary" className="mb-4" data-testid="badge-top">
+                <Star className="w-3 h-3 mr-1" />
+                Обновляется каждый день
+              </Badge>
+              <h2 className="text-3xl font-bold mb-3">Топ-3 девушки сегодня</h2>
+              <p className="text-muted-foreground max-w-xl mx-auto">
+                Лучшие анкеты дня — проверенные девушки Астрахани с реальными фото
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {topGirls.map((girl) => (
+                <a
+                  key={girl.id}
+                  href="https://t.me/intimdatebot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Card className="overflow-visible hover-elevate" data-testid={`card-top-girl-${girl.id}`}>
+                    <div className="relative">
+                      {girl.hasPhoto ? (
+                        <img
+                          src={`/api/girl-photo/${girl.id}`}
+                          alt={`${girl.name}, ${girl.age} лет — эскорт Астрахань`}
+                          className="w-full aspect-[3/4] object-cover rounded-t-md"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[3/4] bg-muted rounded-t-md flex items-center justify-center">
+                          <Users className="w-12 h-12 text-muted-foreground/30" />
+                        </div>
+                      )}
+                      {girl.isOnline && (
+                        <Badge className="absolute top-3 right-3 bg-green-500 text-white border-0" data-testid={`badge-online-${girl.id}`}>
+                          Online
+                        </Badge>
+                      )}
+                    </div>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                        <h3 className="font-semibold text-lg">{girl.name}, {girl.age}</h3>
+                        <span className="text-sm text-muted-foreground">{girl.city}</span>
+                      </div>
+                      {(girl.height || girl.breast || girl.weight) && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {girl.height && (
+                            <Badge variant="outline" className="text-xs">{girl.height} см</Badge>
+                          )}
+                          {girl.weight && (
+                            <Badge variant="outline" className="text-xs">{girl.weight} кг</Badge>
+                          )}
+                          {girl.breast && (
+                            <Badge variant="outline" className="text-xs">Грудь {girl.breast}</Badge>
+                          )}
+                        </div>
+                      )}
+                      {girl.bio && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">{girl.bio}</p>
+                      )}
+                      <Button className="w-full mt-3" variant="outline" data-testid={`button-open-girl-${girl.id}`}>
+                        <SiTelegram className="w-4 h-4 mr-2" />
+                        Написать в боте
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </a>
+              ))}
+            </div>
           </div>
         </section>
       )}
