@@ -28,7 +28,7 @@ def get_search_keyboard(profile_user_id: int) -> InlineKeyboardBuilder:
         InlineKeyboardButton(text="💌 Написать", callback_data=f"like_{profile_user_id}"),
         InlineKeyboardButton(text="⏭ Пропустить", callback_data=f"skip_{profile_user_id}")
     )
-    kb.row(InlineKeyboardButton(text="💬 Отзывы", callback_data=f"view_comments_{profile_user_id}"))
+    kb.row(InlineKeyboardButton(text="💬 Комментарии", callback_data=f"view_comments_{profile_user_id}"))
     return kb
 
 
@@ -86,7 +86,7 @@ def format_profile_text(profile: dict) -> str:
 
     comments_count = db.get_comments_count(profile['user_id'])
     if comments_count > 0:
-        lines.append(f"\n💬 Отзывов: {comments_count}")
+        lines.append(f"\n💬 Комментариев: {comments_count}")
 
     return "\n".join(lines)
 

@@ -361,7 +361,7 @@ def format_profile(user: dict) -> str:
 
     comments_count = db.get_comments_count(user['user_id'])
     if comments_count > 0:
-        lines.append(f"Отзывы: {comments_count}")
+        lines.append(f"Комментарии: {comments_count}")
 
     return "\n".join(lines)
 
@@ -543,25 +543,30 @@ async def reply_open_chats(message: Message, state: FSMContext):
 
 
 @router.message(F.text == "Профиль")
+@router.message(F.text == "👤 Профиль")
 async def reply_my_profile(message: Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
     if not user:
         return
 
-    username = user.get('username', 'Не указан')
-    age = user.get('age', 25)
-    city = user.get('city', 'астрахань')
-
-    text = (
-        f"<b>Ваш профиль</b>\n\n"
-        f"Ник: @{username}\n"
-        f"Возраст: {age}\n"
-        f"Город: {city}\n"
-    )
-    kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
-    await message.answer(text, reply_markup=kb.as_markup())
+    if user.get('is_girl'):
+        profile_text = format_profile(user)
+        kb = get_female_menu_keyboard()
+        from bot.handlers.search import send_profile_with_photo
+        await send_profile_with_photo(message.bot, message.chat.id, user, profile_text, kb.as_markup())
+    else:
+        current_name = user.get('name', '') or 'Аноним'
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text=f"Имя: {current_name}", callback_data="edit_name"))
+        kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
+        kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
+        kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
+        kb.row(InlineKeyboardButton(text="Кого показывать", callback_data="edit_pref"))
+        kb.row(InlineKeyboardButton(text="Я ищу", callback_data="edit_looking_for"))
+        kb.row(InlineKeyboardButton(text="Фото/видео", callback_data="edit_photo"))
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await message.answer("<b>Что хотите изменить?</b>", reply_markup=kb.as_markup())
 
 
 @router.message(F.text == "Отслеживаемые")
@@ -603,7 +608,7 @@ async def reply_show_help(message: Message, state: FSMContext):
         "2. Ставьте лайки или отправляйте подарки\n"
         "3. Если девушка ответит взаимностью - будет матч\n"
         "4. Отслеживайте понравившихся девушек\n"
-        "5. Оставляйте отзывы на анкетах\n\n"
+        "5. Оставляйте комментарии на анкетах\n\n"
         "Команды:\n"
         "/start - Главное меню\n"
         "/search - Искать анкеты\n"
@@ -701,7 +706,7 @@ async def show_help(callback: CallbackQuery):
         "2. Ставьте лайки или отправляйте подарки\n"
         "3. Если девушка ответит взаимностью - будет матч\n"
         "4. Отслеживайте понравившихся девушек\n"
-        "5. Оставляйте отзывы на анкетах\n\n"
+        "5. Оставляйте комментарии на анкетах\n\n"
         "Команды:\n"
         "/start - Главное меню\n"
         "/search - Искать анкеты\n"
@@ -990,7 +995,7 @@ async def start_comment(callback: CallbackQuery, state: FSMContext):
     await state.update_data(comment_to_id=to_id)
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
-    await callback.message.answer("Напишите ваш отзыв:", reply_markup=kb.as_markup())
+    await callback.message.answer("Напишите ваш комментарий:", reply_markup=kb.as_markup())
     await callback.answer()
 
 
@@ -998,17 +1003,17 @@ async def start_comment(callback: CallbackQuery, state: FSMContext):
 async def process_comment(message: Message, state: FSMContext):
     text = message.text.strip() if message.text else ""
     if len(text) < 2:
-        await message.answer("Отзыв слишком короткий. Минимум 2 символа:")
+        await message.answer("Комментарий слишком короткий. Минимум 2 символа:")
         return
     if len(text) > 500:
-        await message.answer("Отзыв слишком длинный. Максимум 500 символов:")
+        await message.answer("Комментарий слишком длинный. Максимум 500 символов:")
         return
 
     data = await state.get_data()
     to_id = data.get('comment_to_id')
     db.add_comment(message.from_user.id, to_id, text)
     await state.clear()
-    await message.answer("Отзыв добавлен!")
+    await message.answer("Комментарий добавлен!")
 
 
 @router.callback_query(F.data.startswith("view_comments_"))
@@ -1017,16 +1022,16 @@ async def view_comments(callback: CallbackQuery):
     comments = db.get_comments(user_id, limit=10)
 
     if not comments:
-        text = "<b>Отзывы:</b>\n\nПока нет отзывов."
+        text = "<b>Комментарии:</b>\n\nПока нет комментариев."
     else:
-        text = "<b>Отзывы:</b>\n\n"
+        text = "<b>Комментарии:</b>\n\n"
         for c in comments:
             name = c.get('name') or ''
             author = name if name else "Аноним"
             text += f"  <b>{author}:</b> {c['text']}\n\n"
 
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Оставить отзыв", callback_data=f"comment_{user_id}"))
+    kb.row(InlineKeyboardButton(text="Оставить комментарий", callback_data=f"comment_{user_id}"))
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     await callback.message.answer(text, reply_markup=kb.as_markup())
     await callback.answer()
@@ -1493,7 +1498,7 @@ async def girl_stats(callback: CallbackQuery):
         f"Просмотров: {stats['views']}\n"
         f"Лайков: {stats['likes_received']}\n"
         f"Отслеживающих: {stats['followers']}\n"
-        f"Отзывов: {stats['comments']}\n"
+        f"Комментариев: {stats['comments']}\n"
         f"Матчей: {stats['matches']}\n"
         f"Активных чатов: {stats['chats_active']}\n"
     )
@@ -2114,5 +2119,11 @@ async def show_updated_profile(bot, user_id: int):
     if user.get('is_girl'):
         await show_girl_edit_profile(bot, user_id)
     else:
-        kb = get_male_menu_keyboard()
-        await bot.send_message(user_id, "Главное меню", reply_markup=kb.as_markup())
+        current_name = user.get('name', '') or 'Аноним'
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text=f"Имя: {current_name}", callback_data="edit_name"))
+        kb.row(InlineKeyboardButton(text="Возраст", callback_data="edit_age"))
+        kb.row(InlineKeyboardButton(text="Город", callback_data="edit_city"))
+        kb.row(InlineKeyboardButton(text="О себе", callback_data="edit_bio"))
+        kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        await bot.send_message(user_id, "<b>Профиль обновлён!</b>", reply_markup=kb.as_markup())
