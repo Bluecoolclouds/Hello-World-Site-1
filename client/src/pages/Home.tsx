@@ -176,13 +176,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md" role="banner">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 text-primary fill-primary" />
             <span className="font-bold text-lg">DateBot</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
+          <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground" aria-label="Основная навигация">
             <button
               onClick={() => scrollToSection("features")}
               className="hover-elevate"
@@ -221,7 +221,8 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden py-20 md:py-32">
+      <main>
+      <section className="relative overflow-hidden py-20 md:py-32" aria-label="Главная">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/5 to-transparent" />
         <div className="relative max-w-6xl mx-auto px-4 text-center">
           <Badge variant="secondary" className="mb-6" data-testid="badge-hero">
@@ -272,7 +273,7 @@ export default function Home() {
       </section>
 
       {stats && (
-        <section className="py-12 border-y bg-muted/30">
+        <section className="py-12 border-y bg-muted/30" aria-label="Статистика">
           <div className="max-w-4xl mx-auto px-4 grid grid-cols-3 gap-8">
             <AnimatedCounter
               target={stats.totalUsers + 70}
@@ -284,7 +285,7 @@ export default function Home() {
         </section>
       )}
 
-      <section id="features" className="py-20">
+      <section id="features" className="py-20" aria-label="Возможности для мужчин">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold mb-3">Для мужчин</h2>
@@ -308,7 +309,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-20 bg-muted/30">
+      <section className="py-20 bg-muted/30" aria-label="Возможности для девушек">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold mb-3">Для девушек</h2>
@@ -332,7 +333,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="how" className="py-20">
+      <section id="how" className="py-20" aria-label="Как это работает">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold mb-3">Как это работает</h2>
@@ -391,7 +392,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="services" className="py-20 bg-muted/30">
+      <section id="services" className="py-20 bg-muted/30" aria-label="Каталог услуг">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold mb-3">Каталог услуг</h2>
@@ -444,7 +445,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-20">
+      <section className="py-20" aria-label="Безопасность">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold mb-3">Безопасность</h2>
@@ -481,7 +482,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-20 bg-gradient-to-br from-primary/10 via-accent/5 to-transparent">
+      <section className="py-20 bg-gradient-to-br from-primary/10 via-accent/5 to-transparent" aria-label="Призыв к действию">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Готовы попробовать?</h2>
           <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
@@ -500,8 +501,9 @@ export default function Home() {
           </a>
         </div>
       </section>
+      </main>
 
-      <footer className="py-8 border-t">
+      <footer className="py-8 border-t" role="contentinfo">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Heart className="w-4 h-4 text-primary fill-primary" />
