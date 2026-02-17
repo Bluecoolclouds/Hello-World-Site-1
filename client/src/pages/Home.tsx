@@ -237,6 +237,16 @@ export default function Home() {
             Удобный бот для поиска компании и общения. Анонимные чаты,
             детальные профили, фильтры — всё внутри Telegram.
           </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+            <Badge variant="outline" className="text-sm px-3 py-1.5" data-testid="badge-verified">
+              <Shield className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              Все анкеты проверены
+            </Badge>
+            <Badge variant="outline" className="text-sm px-3 py-1.5" data-testid="badge-no-prepay">
+              <Lock className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              Работаем без предоплаты
+            </Badge>
+          </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
               href="https://t.me/your_bot_username"
