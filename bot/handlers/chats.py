@@ -88,6 +88,11 @@ async def open_chat(callback: CallbackQuery):
         await callback.answer("Нет доступа")
         return
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
     if is_client:
         other_user = db.get_user(chat['girl_id'])
         other_name = other_user.get('name', '') if other_user else 'Девушка'
@@ -138,6 +143,10 @@ async def open_chat(callback: CallbackQuery):
 @router.callback_query(F.data == "back_to_chats")
 async def back_to_chats(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user_id = callback.from_user.id
     user = db.get_user(user_id)
 
@@ -191,6 +200,11 @@ async def start_reply(callback: CallbackQuery, state: FSMContext):
     if chat['client_id'] != user_id and chat['girl_id'] != user_id:
         await callback.answer("Нет доступа")
         return
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
     await state.set_state(ChatReply.waiting_message)
     await state.update_data(chat_id=chat_id)

@@ -329,6 +329,10 @@ async def handle_view_services(callback: CallbackQuery):
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_profile_{girl_id}"))
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer("\n".join(lines), reply_markup=kb.as_markup(), parse_mode="HTML")
     await callback.answer()
 
@@ -340,6 +344,10 @@ async def handle_back_to_profile(callback: CallbackQuery):
     if not profile:
         await callback.answer("Профиль не найден")
         return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     profile_text = format_profile_text(profile)
     kb = get_search_keyboard(profile['user_id'])
     await send_profile_with_photo(callback.bot, callback.from_user.id, profile, profile_text, kb.as_markup())

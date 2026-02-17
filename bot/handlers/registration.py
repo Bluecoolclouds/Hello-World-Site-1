@@ -494,6 +494,10 @@ async def reset_ratings_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
         kb = get_female_menu_keyboard()
@@ -994,8 +998,24 @@ async def start_comment(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CommentState.text)
     await state.update_data(comment_to_id=to_id)
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data=f"cancel_comment_{to_id}"))
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer("Напишите ваш комментарий:", reply_markup=kb.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cancel_comment_"))
+async def cancel_comment(callback: CallbackQuery, state: FSMContext):
+    to_id = int(callback.data.split("_")[2])
+    await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await _show_comments_block(callback.message, to_id)
     await callback.answer()
 
 
@@ -1013,12 +1033,10 @@ async def process_comment(message: Message, state: FSMContext):
     to_id = data.get('comment_to_id')
     db.add_comment(message.from_user.id, to_id, text)
     await state.clear()
-    await message.answer("Комментарий добавлен!")
+    await _show_comments_block(message, to_id)
 
 
-@router.callback_query(F.data.startswith("view_comments_"))
-async def view_comments(callback: CallbackQuery):
-    user_id = int(callback.data.split("_")[2])
+async def _show_comments_block(message: Message, user_id: int):
     comments = db.get_comments(user_id, limit=10)
 
     if not comments:
@@ -1033,7 +1051,17 @@ async def view_comments(callback: CallbackQuery):
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Оставить комментарий", callback_data=f"comment_{user_id}"))
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
-    await callback.message.answer(text, reply_markup=kb.as_markup())
+    await message.answer(text, reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data.startswith("view_comments_"))
+async def view_comments(callback: CallbackQuery):
+    user_id = int(callback.data.split("_")[2])
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await _show_comments_block(callback.message, user_id)
     await callback.answer()
 
 
@@ -1042,6 +1070,10 @@ async def view_comments(callback: CallbackQuery):
 @router.callback_query(F.data == "show_matches")
 async def show_matches_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     matches = db.get_user_matches(user_id)
 
     if not matches:
@@ -1113,6 +1145,10 @@ def get_girl_edit_profile_keyboard(user: dict) -> InlineKeyboardBuilder:
 
 @router.callback_query(F.data == "edit_profile")
 async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     is_girl = user.get('is_girl', 0) if user else 0
 
@@ -1427,6 +1463,10 @@ async def process_edit_schedule(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "girl_chats")
 async def girl_chats_callback(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user_id = callback.from_user.id
     chats = db.get_girl_chats(user_id)
 
@@ -1459,6 +1499,10 @@ async def girl_chats_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "my_followers")
 async def my_followers(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user_id = callback.from_user.id
 
     followers = db.get_followers(user_id)
