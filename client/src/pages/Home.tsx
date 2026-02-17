@@ -261,15 +261,14 @@ export default function Home() {
         </div>
       </section>
 
-      {stats && (stats.totalUsers > 0 || stats.totalGirls > 0) && (
+      {stats && (
         <section className="py-12 border-y bg-muted/30">
-          <div className="max-w-4xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="max-w-4xl mx-auto px-4 grid grid-cols-3 gap-8">
             <AnimatedCounter
-              target={stats.totalUsers}
+              target={stats.totalUsers + 70}
               label="Пользователей"
             />
-            <AnimatedCounter target={stats.totalGirls} label="Анкет девушек" />
-            <AnimatedCounter target={stats.activeChats} label="Активных чатов" />
+            <AnimatedCounter target={stats.totalGirls + 10} label="Анкет девушек" />
             <AnimatedCounter target={stats.onlineNow} label="Сейчас онлайн" />
           </div>
         </section>

@@ -36,16 +36,18 @@ export async function registerRoutes(
         activeChats = db.prepare("SELECT COUNT(*) as count FROM bot_chats WHERE is_active = 1").get() as any;
       } catch {}
 
-      const onlineNow = db.prepare("SELECT COUNT(*) as count FROM users WHERE is_online = 1").get() as any;
-
       db.close();
+
+      const girlsCount = (totalGirls?.count || 0) + 10;
+      const maxOnline = Math.floor(girlsCount / 2);
+      const onlineRandom = Math.max(3, Math.floor(Math.random() * maxOnline) + 1);
 
       res.json({
         totalUsers: totalUsers?.count || 0,
         totalGirls: totalGirls?.count || 0,
         totalMen: totalMen?.count || 0,
         activeChats: activeChats?.count || 0,
-        onlineNow: onlineNow?.count || 0,
+        onlineNow: onlineRandom,
       });
     } catch {
       res.json({
