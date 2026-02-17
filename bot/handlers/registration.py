@@ -188,7 +188,7 @@ def parse_services(services_str: str) -> list:
             return data
         return []
     except (json.JSONDecodeError, TypeError):
-        return []
+        return [s.strip() for s in services_str.split(',') if s.strip()]
 
 
 def format_services_list(services: list) -> str:
@@ -1270,7 +1270,7 @@ async def svc_toggle_item(callback: CallbackQuery, state: FSMContext):
     else:
         services.append(item_name)
 
-    db.update_user_field(callback.from_user.id, 'services', json.dumps(services))
+    db.update_user_field(callback.from_user.id, 'services', json.dumps(services, ensure_ascii=False))
 
     kb = get_services_category_keyboard(cat_id, services)
     try:

@@ -928,7 +928,7 @@ async def handle_gsvc_toggle(callback: CallbackQuery, state: FSMContext):
             current.remove(item)
         else:
             current.append(item)
-        db.update_user_field(girl_id, 'services', ','.join(current))
+        db.update_user_field(girl_id, 'services', json.dumps(current, ensure_ascii=False))
 
     kb = get_services_category_keyboard(
         cat_id, current,
