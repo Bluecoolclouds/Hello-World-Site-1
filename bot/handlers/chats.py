@@ -58,7 +58,8 @@ async def cmd_chats(message: Message):
         kb = InlineKeyboardBuilder()
         for chat in chats[:20]:
             girl_name = chat.get('name') or f"Девушка {chat['girl_id']}"
-            online = " 🟢" if chat.get('is_online') else ""
+            from bot.db import is_user_online
+            online = " 🟢" if is_user_online(chat) else ""
             label = f"💬 {girl_name}{online}"
             kb.row(InlineKeyboardButton(
                 text=label,
@@ -173,7 +174,8 @@ async def back_to_chats(callback: CallbackQuery, state: FSMContext):
             label = f"💬 {name}, {chat.get('age', '?')}"
         else:
             name = chat.get('name') or f"Девушка {chat['girl_id']}"
-            online = " 🟢" if chat.get('is_online') else ""
+            from bot.db import is_user_online
+            online = " 🟢" if is_user_online(chat) else ""
             label = f"💬 {name}{online}"
         kb.row(InlineKeyboardButton(
             text=label,

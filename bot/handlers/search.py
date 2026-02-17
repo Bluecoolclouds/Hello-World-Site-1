@@ -37,7 +37,8 @@ def format_profile_text(profile: dict) -> str:
 
     name = profile.get('name', '')
     is_girl = profile.get('is_girl', 0)
-    is_online = profile.get('is_online', 0)
+    from bot.db import is_user_online
+    is_online = is_user_online(profile)
 
     lines = []
 
@@ -64,6 +65,9 @@ def format_profile_text(profile: dict) -> str:
 
     if is_online:
         lines.append("🟢 Онлайн")
+    online_sched = profile.get('online_schedule', '')
+    if online_sched and not is_online:
+        lines.append(f"График онлайн: {online_sched}")
 
     prices_data = parse_prices(profile.get('prices', ''))
     if prices_data:

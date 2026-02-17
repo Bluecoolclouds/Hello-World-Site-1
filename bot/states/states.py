@@ -18,6 +18,7 @@ class EditProfile(StatesGroup):
     services = State()
     prices = State()
     schedule = State()
+    online_schedule = State()
     phone = State()
     breast = State()
     height = State()

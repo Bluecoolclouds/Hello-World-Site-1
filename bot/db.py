@@ -13,6 +13,40 @@ def normalize_city(city: str) -> str:
     return city.strip().lower()
 
 
+def check_online_by_schedule(online_schedule: str) -> bool:
+    """Проверяет, попадает ли текущее время (МСК) в расписание онлайн.
+    Формат: 'HH:MM-HH:MM', поддерживает переход через полночь (напр. 22:00-06:00)."""
+    if not online_schedule:
+        return False
+    try:
+        parts = online_schedule.strip().split('-')
+        if len(parts) != 2:
+            return False
+        start_h, start_m = map(int, parts[0].strip().split(':'))
+        end_h, end_m = map(int, parts[1].strip().split(':'))
+
+        import datetime
+        msk_offset = datetime.timezone(datetime.timedelta(hours=3))
+        now = datetime.datetime.now(msk_offset)
+        now_minutes = now.hour * 60 + now.minute
+        start_minutes = start_h * 60 + start_m
+        end_minutes = end_h * 60 + end_m
+
+        if start_minutes <= end_minutes:
+            return start_minutes <= now_minutes < end_minutes
+        else:
+            return now_minutes >= start_minutes or now_minutes < end_minutes
+    except Exception:
+        return False
+
+
+def is_user_online(user: dict) -> bool:
+    """Проверяет онлайн ли пользователь: ручной переключатель ИЛИ по расписанию."""
+    if user.get('is_online', 0):
+        return True
+    return check_online_by_schedule(user.get('online_schedule', ''))
+
+
 def format_online_status(last_active: float) -> str:
     """Форматирование статуса онлайн"""
     if not last_active:
@@ -134,6 +168,10 @@ class Database:
             if 'is_online' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN is_online INTEGER DEFAULT 0")
                 logger.info("Добавлена колонка is_online")
+
+            if 'online_schedule' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN online_schedule TEXT")
+                logger.info("Добавлена колонка online_schedule")
 
             if 'phone' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
@@ -330,7 +368,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'name', 'name_changed_at', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'online_schedule', 'name', 'name_changed_at', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
         if field not in allowed:
             return
         if field == 'city':
@@ -732,7 +770,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT t.tracked_user_id, t.created_at, u.age, u.city, u.bio, u.name, u.photo_id, u.media_type, u.media_ids, u.is_online, u.last_active
+                SELECT t.tracked_user_id, t.created_at, u.age, u.city, u.bio, u.name, u.photo_id, u.media_type, u.media_ids, u.is_online, u.online_schedule, u.last_active
                 FROM tracking t
                 JOIN users u ON t.tracked_user_id = u.user_id
                 WHERE t.user_id = ?
@@ -885,7 +923,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
-                SELECT bc.*, u.name, u.age, u.city, u.is_online, u.photo_id, u.media_type as user_media_type
+                SELECT bc.*, u.name, u.age, u.city, u.is_online, u.online_schedule, u.photo_id, u.media_type as user_media_type
                 FROM bot_chats bc
                 JOIN users u ON u.user_id = bc.girl_id
                 WHERE bc.client_id = ? AND bc.is_active = 1

@@ -353,8 +353,11 @@ def format_profile(user: dict) -> str:
     if schedule:
         lines.append(f"График: {schedule}")
 
-    is_online = user.get('is_online', 0)
-    if is_online:
+    online_sched = user.get('online_schedule', '')
+    if online_sched:
+        lines.append(f"Авто-онлайн: {online_sched} (МСК)")
+
+    if db.is_user_online(user):
         lines.append("Онлайн сейчас")
     else:
         lines.append(online_status)
@@ -1431,20 +1434,32 @@ async def edit_schedule_callback(callback: CallbackQuery, state: FSMContext):
         pass
     user = db.get_user(callback.from_user.id)
     current_schedule = user.get('schedule', '') if user else ''
-    is_online = user.get('is_online', 0) if user else 0
+    is_online_manual = user.get('is_online', 0) if user else 0
+    online_schedule = user.get('online_schedule', '') if user else ''
+    actually_online = db.is_user_online(user) if user else False
 
     kb = InlineKeyboardBuilder()
-    online_text = "Сейчас: онлайн" if is_online else "Сейчас: оффлайн"
     kb.row(InlineKeyboardButton(
-        text=f"{'Выключить онлайн' if is_online else 'Включить онлайн'}",
+        text=f"{'Выключить онлайн' if is_online_manual else 'Включить онлайн'} (вручную)",
         callback_data="toggle_online"
     ))
-    kb.row(InlineKeyboardButton(text="Изменить график", callback_data="change_schedule_text"))
+    kb.row(InlineKeyboardButton(
+        text=f"{'Изменить' if online_schedule else 'Настроить'} авто-онлайн",
+        callback_data="set_online_schedule"
+    ))
+    if online_schedule:
+        kb.row(InlineKeyboardButton(text="Убрать авто-онлайн", callback_data="clear_online_schedule"))
+    kb.row(InlineKeyboardButton(text="Изменить график работы", callback_data="change_schedule_text"))
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
 
-    text = f"<b>График / онлайн</b>\n\n{online_text}\n"
+    status_icon = "🟢" if actually_online else "🔴"
+    text = f"<b>График / онлайн</b>\n\n{status_icon} Сейчас: {'онлайн' if actually_online else 'оффлайн'}\n"
+    if is_online_manual:
+        text += "Ручной режим: включён\n"
+    if online_schedule:
+        text += f"Авто-онлайн: {online_schedule} (МСК)\n"
     if current_schedule:
-        text += f"График: {current_schedule}\n"
+        text += f"График работы: {current_schedule}\n"
 
     await callback.message.answer(text, reply_markup=kb.as_markup())
     await callback.answer()
@@ -1458,21 +1473,113 @@ async def toggle_online(callback: CallbackQuery):
         return
     new_val = 0 if user.get('is_online', 0) else 1
     db.update_user_field(callback.from_user.id, 'is_online', new_val)
+    online_schedule = user.get('online_schedule', '')
+    actually_online = new_val or db.check_online_by_schedule(online_schedule)
     status = "Онлайн" if new_val else "Оффлайн"
-    await callback.answer(f"Статус: {status}")
+    await callback.answer(f"Ручной режим: {status}")
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(
-        text=f"{'Выключить онлайн' if new_val else 'Включить онлайн'}",
+        text=f"{'Выключить онлайн' if new_val else 'Включить онлайн'} (вручную)",
         callback_data="toggle_online"
     ))
-    kb.row(InlineKeyboardButton(text="Изменить график", callback_data="change_schedule_text"))
+    kb.row(InlineKeyboardButton(
+        text=f"{'Изменить' if online_schedule else 'Настроить'} авто-онлайн",
+        callback_data="set_online_schedule"
+    ))
+    if online_schedule:
+        kb.row(InlineKeyboardButton(text="Убрать авто-онлайн", callback_data="clear_online_schedule"))
+    kb.row(InlineKeyboardButton(text="Изменить график работы", callback_data="change_schedule_text"))
     kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
 
-    await callback.message.edit_text(
-        f"<b>График / онлайн</b>\n\nСейчас: {'онлайн' if new_val else 'оффлайн'}",
+    status_icon = "🟢" if actually_online else "🔴"
+    text = f"<b>График / онлайн</b>\n\n{status_icon} Сейчас: {'онлайн' if actually_online else 'оффлайн'}\n"
+    if new_val:
+        text += "Ручной режим: включён\n"
+    if online_schedule:
+        text += f"Авто-онлайн: {online_schedule} (МСК)\n"
+
+    await callback.message.edit_text(text, reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data == "set_online_schedule")
+async def set_online_schedule(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await state.set_state(EditProfile.online_schedule)
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="edit_schedule"))
+    await callback.message.answer(
+        "<b>Настройка авто-онлайн</b>\n\n"
+        "Введите время работы в формате <b>ЧЧ:ММ-ЧЧ:ММ</b>\n"
+        "Время по Москве (МСК).\n\n"
+        "Примеры:\n"
+        "• <code>00:00-06:00</code> — с полуночи до 6 утра\n"
+        "• <code>10:00-22:00</code> — с 10 утра до 10 вечера\n"
+        "• <code>22:00-06:00</code> — с 10 вечера до 6 утра\n\n"
+        "В это время вы будете автоматически показываться как онлайн каждый день.",
         reply_markup=kb.as_markup()
     )
+    await callback.answer()
+
+
+@router.message(EditProfile.online_schedule)
+async def process_online_schedule(message: Message, state: FSMContext):
+    import re
+    text = message.text.strip() if message.text else ""
+    match = re.match(r'^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$', text)
+    if not match:
+        await message.answer(
+            "Неверный формат. Введите время в формате <b>ЧЧ:ММ-ЧЧ:ММ</b>\n"
+            "Например: <code>00:00-06:00</code>"
+        )
+        return
+    h1, m1, h2, m2 = int(match.group(1)), int(match.group(2)), int(match.group(3)), int(match.group(4))
+    if h1 > 23 or m1 > 59 or h2 > 23 or m2 > 59:
+        await message.answer("Некорректное время. Часы 0-23, минуты 0-59.")
+        return
+    schedule_str = f"{h1:02d}:{m1:02d}-{h2:02d}:{m2:02d}"
+    db.update_user_field(message.from_user.id, 'online_schedule', schedule_str)
+    await state.clear()
+    await message.answer(f"Авто-онлайн установлен: <b>{schedule_str}</b> (МСК)\n\nКаждый день в это время вы будете показываться как онлайн.")
+    user = db.get_user(message.from_user.id)
+    if user and user.get('is_girl'):
+        kb = get_female_menu_keyboard()
+        await message.answer("Главное меню", reply_markup=kb.as_markup())
+
+
+@router.callback_query(F.data == "clear_online_schedule")
+async def clear_online_schedule(callback: CallbackQuery):
+    db.update_user_field(callback.from_user.id, 'online_schedule', '')
+    await callback.answer("Авто-онлайн отключён")
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    user = db.get_user(callback.from_user.id)
+    current_schedule = user.get('schedule', '') if user else ''
+    is_online_manual = user.get('is_online', 0) if user else 0
+    actually_online = bool(is_online_manual)
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(
+        text=f"{'Выключить онлайн' if is_online_manual else 'Включить онлайн'} (вручную)",
+        callback_data="toggle_online"
+    ))
+    kb.row(InlineKeyboardButton(text="Настроить авто-онлайн", callback_data="set_online_schedule"))
+    kb.row(InlineKeyboardButton(text="Изменить график работы", callback_data="change_schedule_text"))
+    kb.row(InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+
+    status_icon = "🟢" if actually_online else "🔴"
+    text = f"<b>График / онлайн</b>\n\n{status_icon} Сейчас: {'онлайн' if actually_online else 'оффлайн'}\n"
+    if is_online_manual:
+        text += "Ручной режим: включён\n"
+    if current_schedule:
+        text += f"График работы: {current_schedule}\n"
+
+    await callback.message.answer(text, reply_markup=kb.as_markup())
 
 
 @router.callback_query(F.data == "change_schedule_text")
@@ -1483,9 +1590,9 @@ async def change_schedule_text(callback: CallbackQuery, state: FSMContext):
         pass
     await state.set_state(EditProfile.schedule)
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
+    kb.row(InlineKeyboardButton(text="Отмена", callback_data="edit_schedule"))
     await callback.message.answer(
-        "Введите ваш график (например: Пн-Пт 10:00-22:00):\n\n"
+        "Введите ваш график работы (например: Пн-Пт 10:00-22:00):\n\n"
         "Или отправьте <b>-</b> чтобы убрать.",
         reply_markup=kb.as_markup()
     )
