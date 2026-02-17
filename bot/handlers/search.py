@@ -289,6 +289,7 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="💬 Написать", callback_data=f"openchat_{chat_id}"))
+    kb.row(InlineKeyboardButton(text="Следующая", callback_data="next_profile"))
 
     await callback.bot.send_message(
         from_id,
@@ -298,7 +299,6 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer()
-    await show_next_profile(callback)
 
 
 async def notify_new_like(bot, to_user_id: int, from_user_id: int):
@@ -316,6 +316,16 @@ async def notify_new_like(bot, to_user_id: int, from_user_id: int):
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data == "next_profile")
+async def handle_next_profile(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.answer()
+    await show_next_profile(callback)
 
 
 @router.callback_query(F.data.regexp(r"^skip_\d+$"))
