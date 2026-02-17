@@ -270,12 +270,6 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
     db.add_tracking(from_id, to_id)
 
     chat_id = await start_chat_with_girl(callback.bot, from_id, to_id)
-    await callback.answer()
-    await show_next_profile(callback)
-
-    from bot.states.states import ChatReply
-    await state.set_state(ChatReply.waiting_message)
-    await state.update_data(chat_id=chat_id)
 
     girl = db.get_user(to_id)
     girl_name = girl.get('name', 'Девушка') if girl else 'Девушка'
@@ -283,14 +277,16 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
         girl_name = 'Девушка'
 
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_chat_reply"))
+    kb.row(InlineKeyboardButton(text="💬 Написать", callback_data=f"openchat_{chat_id}"))
 
     await callback.message.answer(
-        f"💬 Чат с <b>{girl_name}</b>\n\n"
-        "Пришлите сообщение (текст, фото или видео):",
+        f"💌 Чат с <b>{girl_name}</b> создан!",
         reply_markup=kb.as_markup(),
         parse_mode="HTML"
     )
+
+    await callback.answer()
+    await show_next_profile(callback)
 
 
 async def notify_new_like(bot, to_user_id: int, from_user_id: int):
