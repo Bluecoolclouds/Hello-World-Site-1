@@ -1097,6 +1097,10 @@ async def show_matches_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "show_profile")
 async def show_profile_callback(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     if not user:
         await callback.answer("Анкета не найдена")
@@ -1178,6 +1182,10 @@ async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "edit_services")
 async def edit_services_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     services = parse_services(user.get('services', '')) if user else []
     count = len(services)
@@ -1192,6 +1200,10 @@ async def edit_services_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "edit_prices")
 async def edit_prices_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     prices = parse_prices(user.get('prices', '')) if user else {}
 
@@ -1210,6 +1222,10 @@ async def svc_category_view(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Категория не найдена")
         return
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     services = parse_services(user.get('services', '')) if user else []
     cat = SERVICES_CATALOG[cat_id]
@@ -1263,6 +1279,10 @@ async def svc_toggle_item(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "svc_back_cats")
 async def svc_back_to_categories(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     services = parse_services(user.get('services', '')) if user else []
     count = len(services)
@@ -1286,6 +1306,11 @@ async def price_set_field(callback: CallbackQuery, state: FSMContext):
     if field not in PRICE_FIELDS:
         await callback.answer("Неизвестное поле")
         return
+
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
     label = PRICE_FIELDS[field]
     await state.set_state(PriceEdit.field)
@@ -1315,6 +1340,10 @@ async def price_clear_field(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     prices = parse_prices(user.get('prices', '')) if user else {}
     prices.pop(field, None)
@@ -1333,6 +1362,10 @@ async def price_clear_field(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "price_cancel_edit")
 async def price_cancel_edit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     prices = parse_prices(user.get('prices', '')) if user else {}
     table_text = format_price_table(prices, for_pre=True)
@@ -1378,6 +1411,10 @@ async def process_price_value(message: Message, state: FSMContext):
 @router.callback_query(F.data == "price_done")
 async def price_done(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer("Цены сохранены!")
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
@@ -1388,6 +1425,10 @@ async def price_done(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "edit_schedule")
 async def edit_schedule_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     current_schedule = user.get('schedule', '') if user else ''
     is_online = user.get('is_online', 0) if user else 0
@@ -1436,6 +1477,10 @@ async def toggle_online(callback: CallbackQuery):
 
 @router.callback_query(F.data == "change_schedule_text")
 async def change_schedule_text(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await state.set_state(EditProfile.schedule)
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
@@ -1534,6 +1579,10 @@ async def my_followers(callback: CallbackQuery):
 
 @router.callback_query(F.data == "girl_stats")
 async def girl_stats(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user_id = callback.from_user.id
     stats = db.get_girl_stats(user_id)
 
@@ -1567,6 +1616,10 @@ async def edit_name_callback(callback: CallbackQuery, state: FSMContext):
             days_left = int(14 - days_passed) + 1
             await callback.answer(f"Имя можно менять раз в 14 дней. Осталось {days_left} дн.", show_alert=True)
             return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await state.set_state(EditProfile.name)
     await callback.message.answer("Введите новое имя:")
     await callback.answer()
@@ -1642,6 +1695,10 @@ def get_girl_media_keyboard(count: int) -> InlineKeyboardBuilder:
 
 @router.callback_query(F.data == "edit_photo")
 async def edit_photo_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
         media_ids_raw = user.get('media_ids', '')
@@ -1762,6 +1819,10 @@ async def girl_media_invalid(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "girl_media_done")
 async def girl_media_done(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     data = await state.get_data()
     items = data.get('media_items', [])
     if not items:
@@ -1780,6 +1841,10 @@ async def girl_media_done(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "girl_media_reset")
 async def girl_media_reset(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await state.update_data(media_items=[])
     db.update_user_field(callback.from_user.id, 'media_ids', '[]')
     db.update_user_field(callback.from_user.id, 'photo_id', '')
@@ -1797,6 +1862,10 @@ async def girl_media_reset(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "girl_media_cancel")
 async def girl_media_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer("Редактирование медиа отменено.")
     user = db.get_user(callback.from_user.id)
     if user and user.get('is_girl'):
