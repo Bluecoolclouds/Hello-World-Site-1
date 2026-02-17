@@ -1,6 +1,7 @@
 import sqlite3
 import time
 import logging
+import os
 from typing import Optional, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,9 @@ def format_online_status(last_active: float) -> str:
 
 
 class Database:
-    def __init__(self, db_path="bot.db"):
+    def __init__(self, db_path=None):
+        if db_path is None:
+            db_path = os.environ.get("BOT_DB_PATH", "bot.db")
         self.db_path = db_path
         self._create_tables()
         self._migrate_tables()

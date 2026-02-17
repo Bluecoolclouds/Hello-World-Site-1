@@ -20,9 +20,12 @@ export async function registerRoutes(
   app.get("/api/bot-stats", async (req, res) => {
     try {
       const fs = await import("fs");
+      const botDbEnv = process.env.BOT_DB_PATH;
       const candidates = [
+        ...(botDbEnv ? [path.resolve(botDbEnv)] : []),
         path.resolve(process.cwd(), "bot.db"),
         path.resolve(process.cwd(), "bot/dating_bot.db"),
+        path.resolve(process.cwd(), "data/bot.db"),
       ];
       const dbPath = candidates.find((p) => fs.existsSync(p));
       if (!dbPath) {
@@ -66,9 +69,12 @@ export async function registerRoutes(
   app.get("/api/top-girls", async (req, res) => {
     try {
       const fs = await import("fs");
+      const botDbEnv = process.env.BOT_DB_PATH;
       const candidates = [
+        ...(botDbEnv ? [path.resolve(botDbEnv)] : []),
         path.resolve(process.cwd(), "bot.db"),
         path.resolve(process.cwd(), "bot/dating_bot.db"),
+        path.resolve(process.cwd(), "data/bot.db"),
       ];
       const dbPath = candidates.find((p) => fs.existsSync(p));
       if (!dbPath) {
@@ -132,9 +138,12 @@ export async function registerRoutes(
       }
 
       const fs = await import("fs");
+      const botDbEnv = process.env.BOT_DB_PATH;
       const candidates = [
+        ...(botDbEnv ? [path.resolve(botDbEnv)] : []),
         path.resolve(process.cwd(), "bot.db"),
         path.resolve(process.cwd(), "bot/dating_bot.db"),
+        path.resolve(process.cwd(), "data/bot.db"),
       ];
       const dbPath = candidates.find((p) => fs.existsSync(p));
       if (!dbPath) {

@@ -8,3 +8,11 @@ __pycache__
 *.pyc
 .venv
 venv
+.replit
+replit.nix
+replit.md
+.config
+.local
+.cache
+attached_assets
+*.log
