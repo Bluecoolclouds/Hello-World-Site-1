@@ -208,7 +208,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <a
-              href="https://t.me/your_bot_username"
+              href="https://t.me/intimdatebot"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -249,7 +249,7 @@ export default function Home() {
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
-              href="https://t.me/your_bot_username"
+              href="https://t.me/intimdatebot"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -489,7 +489,7 @@ export default function Home() {
             автоматическая — просто нажмите /start.
           </p>
           <a
-            href="https://t.me/your_bot_username"
+            href="https://t.me/intimdatebot"
             target="_blank"
             rel="noopener noreferrer"
           >
