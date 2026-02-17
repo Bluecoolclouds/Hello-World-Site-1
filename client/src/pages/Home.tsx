@@ -90,66 +90,66 @@ function AnimatedCounter({ target, label }: { target: number; label: string }) {
 const FEATURES_FOR_MEN = [
   {
     icon: Search,
-    title: "Поиск анкет",
-    desc: "Листайте профили девушек с фильтрами по возрасту и городу",
+    title: "Каталог индивидуалок",
+    desc: "Реальные фото, параметры, цены — листайте анкеты девушек Астрахани",
   },
   {
     icon: Heart,
-    title: "Лайки и чаты",
-    desc: "Нажмите «Написать» — создастся анонимный чат прямо в боте",
+    title: "Написать напрямую",
+    desc: "Нажмите «Написать» — анонимный чат с девушкой прямо в боте",
   },
   {
     icon: Eye,
-    title: "Отслеживание",
-    desc: "Следите за понравившимися — видите их онлайн-статус",
+    title: "Отслеживание онлайн",
+    desc: "Следите за понравившимися — видите кто сейчас на связи",
   },
   {
     icon: MessageCircle,
-    title: "Комментарии",
-    desc: "Оставляйте отзывы и читайте комментарии других",
+    title: "Отзывы клиентов",
+    desc: "Читайте реальные отзывы и оставляйте свои комментарии",
   },
   {
     icon: Filter,
-    title: "Фильтры",
-    desc: "Настраивайте возрастной диапазон для точного поиска",
+    title: "Фильтры поиска",
+    desc: "Город, возраст, услуги — находите именно то, что нужно",
   },
   {
     icon: Star,
     title: "Подарки",
-    desc: "Отправляйте Telegram Stars в качестве подарков",
+    desc: "Отправляйте Telegram Stars понравившимся девушкам",
   },
 ];
 
 const FEATURES_FOR_GIRLS = [
   {
     icon: UserCheck,
-    title: "Детальный профиль",
-    desc: "Фото, видео, параметры, услуги с 70+ опциями из 9 категорий",
+    title: "Детальная анкета",
+    desc: "Фото, видео, параметры тела, услуги с 70+ опциями из 9 категорий",
   },
   {
     icon: Zap,
-    title: "Гибкие цены",
-    desc: "Настройте цены за 1 час, 2 часа и ночь — на дому и на выезд",
+    title: "Цены на дом и выезд",
+    desc: "Настройте расценки за 1 час, 2 часа и ночь — отдельно для апартаментов и выезда",
   },
   {
     icon: Clock,
-    title: "График и онлайн",
-    desc: "Управляйте расписанием и статусом онлайн",
+    title: "График работы",
+    desc: "Автоматический онлайн по расписанию + ручной переключатель",
   },
   {
     icon: MessageCircle,
     title: "Чаты с клиентами",
-    desc: "Получайте сообщения от клиентов прямо в боте",
+    desc: "Все сообщения от клиентов приходят прямо в бот, отвечайте мгновенно",
   },
   {
     icon: Users,
-    title: "Статистика",
-    desc: "Просмотры, лайки, подписчики, комментарии — всё в одном месте",
+    title: "Статистика анкеты",
+    desc: "Просмотры, лайки, подписчики, отзывы — отслеживайте популярность",
   },
   {
     icon: Shield,
     title: "Безопасность",
-    desc: "Блокировка нежелательных пользователей, анонимность общения",
+    desc: "Блокировка нежелательных клиентов, полная анонимность",
   },
 ];
 
@@ -180,7 +180,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 text-primary fill-primary" />
-            <span className="font-bold text-lg">DateBot</span>
+            <span className="font-bold text-lg">IntimDate</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground" aria-label="Основная навигация">
             <button
@@ -227,16 +227,16 @@ export default function Home() {
         <div className="relative max-w-6xl mx-auto px-4 text-center">
           <Badge variant="secondary" className="mb-6" data-testid="badge-hero">
             <Zap className="w-3 h-3 mr-1" />
-            Telegram бот для знакомств
+            Эскорт услуги Астрахань
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-            Знакомства без границ
+            Девушки по вызову
             <br />
-            <span className="text-primary">прямо в Telegram</span>
+            <span className="text-primary">в Астрахани</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Удобный бот для поиска компании и общения. Анонимные чаты,
-            детальные профили, фильтры — всё внутри Telegram.
+            Проверенные индивидуалки с реальными фото, ценами и отзывами клиентов.
+            Эскорт на дом и выезд — без предоплаты, прямо в Telegram.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
             <Badge variant="outline" className="text-sm px-3 py-1.5" data-testid="badge-verified">
@@ -256,7 +256,7 @@ export default function Home() {
             >
               <Button size="lg" data-testid="button-open-bot-hero">
                 <SiTelegram className="w-5 h-5 mr-2" />
-                Начать знакомства
+                Открыть каталог
               </Button>
             </a>
             <Button
@@ -277,20 +277,20 @@ export default function Home() {
           <div className="max-w-4xl mx-auto px-4 grid grid-cols-3 gap-8">
             <AnimatedCounter
               target={stats.totalUsers + 70}
-              label="Пользователей"
+              label="Клиентов в Астрахани"
             />
-            <AnimatedCounter target={stats.totalGirls + 10} label="Анкет девушек" />
-            <AnimatedCounter target={stats.onlineNow} label="Сейчас онлайн" />
+            <AnimatedCounter target={stats.totalGirls + 10} label="Проверенных анкет" />
+            <AnimatedCounter target={stats.onlineNow} label="Девушек онлайн" />
           </div>
         </section>
       )}
 
-      <section id="features" className="py-20" aria-label="Возможности для мужчин">
+      <section id="features" className="py-20" aria-label="Возможности для клиентов">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-3">Для мужчин</h2>
+            <h2 className="text-3xl font-bold mb-3">Для клиентов</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Простой и быстрый поиск, анонимное общение, удобные фильтры
+              Найдите девушку по вызову в Астрахани — анонимно, быстро, без предоплаты
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -312,9 +312,9 @@ export default function Home() {
       <section className="py-20 bg-muted/30" aria-label="Возможности для девушек">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-3">Для девушек</h2>
+            <h2 className="text-3xl font-bold mb-3">Для девушек эскорта</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Полный контроль над профилем, расценками и общением
+              Полный контроль над профилем, расценками и общением с клиентами
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -484,10 +484,10 @@ export default function Home() {
 
       <section className="py-20 bg-gradient-to-br from-primary/10 via-accent/5 to-transparent" aria-label="Призыв к действию">
         <div className="max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Готовы попробовать?</h2>
+          <h2 className="text-3xl font-bold mb-4">Эскорт Астрахань — начните сейчас</h2>
           <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
-            Откройте бот в Telegram и начните за секунду. Регистрация
-            автоматическая — просто нажмите /start.
+            Откройте бот в Telegram — каталог девушек по вызову с реальными фото и ценами.
+            Без регистрации, без предоплаты.
           </p>
           <a
             href="https://t.me/intimdatebot"
@@ -507,9 +507,9 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Heart className="w-4 h-4 text-primary fill-primary" />
-            <span>DateBot</span>
+            <span>IntimDate</span>
           </div>
-          <p>Telegram бот для знакомств и общения</p>
+          <p>Эскорт услуги Астрахань — проверенные девушки в Telegram</p>
         </div>
       </footer>
     </div>

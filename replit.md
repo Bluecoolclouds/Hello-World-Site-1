@@ -104,9 +104,10 @@ The pattern uses typed route definitions that can be consumed by both frontend h
 
 ### Landing Page
 - **Theme**: Pink/purple (primary: 330 80% 55%, accent: 270 60% 55%) with dark mode support
-- **Sections**: Hero, animated stats counter, features for men (6 cards), features for girls (6 cards), how it works (4 steps), service catalog (9 categories), security, CTA
-- **SEO**: Title, meta description, Open Graph tags in index.html
-- **Bot link**: Placeholder `https://t.me/your_bot_username` — needs real bot username
+- **Sections**: Hero, animated stats counter, features for clients (6 cards), features for girls (6 cards), how it works (5 steps), service catalog (9 categories), security, CTA
+- **SEO**: Full optimization for Astrakhan escort keywords (Yandex-focused), JSON-LD structured data (WebApplication + LocalBusiness), geo meta tags, Twitter Cards, OG tags, semantic HTML with aria-labels
+- **Bot link**: `https://t.me/intimdatebot`
+- **Branding**: IntimDate (was DateBot)
 
 ## External Dependencies
 
