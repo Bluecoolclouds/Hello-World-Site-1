@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.states.states import Registration, EditProfile, FilterState, CommentState, GirlRegistration, PriceEdit, GirlMediaUpload
 from bot.keyboards.keyboards import get_main_menu, get_male_reply_keyboard
-from bot.db import Database, format_online_status
+from bot.db import Database, format_online_status, is_user_online, check_online_by_schedule
 
 router = Router()
 db = Database()
@@ -357,7 +357,7 @@ def format_profile(user: dict) -> str:
     if online_sched:
         lines.append(f"Авто-онлайн: {online_sched} (МСК)")
 
-    if db.is_user_online(user):
+    if is_user_online(user):
         lines.append("Онлайн сейчас")
     else:
         lines.append(online_status)
@@ -1436,7 +1436,7 @@ async def edit_schedule_callback(callback: CallbackQuery, state: FSMContext):
     current_schedule = user.get('schedule', '') if user else ''
     is_online_manual = user.get('is_online', 0) if user else 0
     online_schedule = user.get('online_schedule', '') if user else ''
-    actually_online = db.is_user_online(user) if user else False
+    actually_online = is_user_online(user) if user else False
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(
@@ -1474,7 +1474,7 @@ async def toggle_online(callback: CallbackQuery):
     new_val = 0 if user.get('is_online', 0) else 1
     db.update_user_field(callback.from_user.id, 'is_online', new_val)
     online_schedule = user.get('online_schedule', '')
-    actually_online = new_val or db.check_online_by_schedule(online_schedule)
+    actually_online = new_val or check_online_by_schedule(online_schedule)
     status = "Онлайн" if new_val else "Оффлайн"
     await callback.answer(f"Ручной режим: {status}")
 
