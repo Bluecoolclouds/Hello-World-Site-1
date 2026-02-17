@@ -5,6 +5,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.fsm.context import FSMContext
 
 from bot.db import Database
 from bot.handlers.matching import check_and_notify_match, get_match_keyboard
@@ -260,7 +261,7 @@ async def cmd_search(message: Message):
 
 
 @router.callback_query(F.data.regexp(r"^like_\d+$"))
-async def handle_like(callback: CallbackQuery):
+async def handle_like(callback: CallbackQuery, state: FSMContext):
     from bot.handlers.chats import start_chat_with_girl
     to_id = int(callback.data.split("_")[1])
     from_id = callback.from_user.id
@@ -268,9 +269,28 @@ async def handle_like(callback: CallbackQuery):
     db.add_like(from_id, to_id)
     db.add_tracking(from_id, to_id)
 
-    await start_chat_with_girl(callback.bot, from_id, to_id)
-    await callback.answer("Чат создан!")
+    chat_id = await start_chat_with_girl(callback.bot, from_id, to_id)
+    await callback.answer()
     await show_next_profile(callback)
+
+    from bot.states.states import ChatReply
+    await state.set_state(ChatReply.waiting_message)
+    await state.update_data(chat_id=chat_id)
+
+    girl = db.get_user(to_id)
+    girl_name = girl.get('name', 'Девушка') if girl else 'Девушка'
+    if not girl_name:
+        girl_name = 'Девушка'
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_chat_reply"))
+
+    await callback.message.answer(
+        f"💬 Чат с <b>{girl_name}</b>\n\n"
+        "Пришлите сообщение (текст, фото или видео):",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
 
 
 async def notify_new_like(bot, to_user_id: int, from_user_id: int):

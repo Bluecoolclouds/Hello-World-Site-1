@@ -105,7 +105,7 @@ async def open_chat(callback: CallbackQuery):
         if not other_name:
             other_name = 'Аноним'
 
-    messages = db.get_bot_chat_messages(chat_id, limit=10)
+    messages = db.get_bot_chat_messages(chat_id, limit=20)
 
     lines = [f"💬 Чат с <b>{other_name}</b>\n"]
 
@@ -282,8 +282,8 @@ async def handle_chat_message(message: Message, state: FSMContext, bot: Bot):
 
     reply_kb = InlineKeyboardBuilder()
     reply_kb.row(InlineKeyboardButton(
-        text="✏️ Ответить",
-        callback_data=f"reply_chat_{chat_id}"
+        text="💬 Открыть чат",
+        callback_data=f"openchat_{chat_id}"
     ))
 
     try:
@@ -317,29 +317,13 @@ async def handle_chat_message(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
 
 
-async def start_chat_with_girl(bot: Bot, client_id: int, girl_id: int):
+async def start_chat_with_girl(bot: Bot, client_id: int, girl_id: int) -> int:
     chat_id = db.get_or_create_bot_chat(client_id, girl_id)
     db.add_tracking(client_id, girl_id)
+    return chat_id
 
-    girl = db.get_user(girl_id)
-    girl_name = girl.get('name', 'Девушка') if girl else 'Девушка'
-    if not girl_name:
-        girl_name = 'Девушка'
 
-    kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(
-        text="✏️ Написать",
-        callback_data=f"reply_chat_{chat_id}"
-    ))
-
-    await bot.send_message(
-        client_id,
-        f"💬 Чат с <b>{girl_name}</b> создан!\n\n"
-        "Нажмите «Написать» чтобы отправить сообщение.",
-        reply_markup=kb.as_markup(),
-        parse_mode="HTML"
-    )
-
+async def notify_girl_new_message(bot: Bot, chat_id: int, client_id: int, girl_id: int):
     client = db.get_user(client_id)
     client_name = client.get('name', '') if client else ''
     if not client_name:
