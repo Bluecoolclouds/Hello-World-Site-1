@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a full-stack web application built with a React frontend and Express backend. The project appears to be a starter template that currently displays a simple greeting message ("Привет, Мир" / "Hello World"). Based on attached assets, the intended direction is to build a Telegram dating bot with user registration, profile management, matching, and messaging features.
+This is a full-stack web application built with a React frontend and Express backend. The website serves as a landing page for a Telegram dating bot, showcasing features, live statistics, and a call-to-action to open the bot. The bot itself runs as a separate Python process.
 
 The codebase uses TypeScript throughout, with a monorepo-style structure separating client, server, and shared code.
 
@@ -96,8 +96,15 @@ The `bot/` directory contains a fully functional Telegram dating bot built with 
 ### API Structure
 Routes are defined in `shared/routes.ts` with Zod validation:
 - `GET /api/greeting` - Returns a greeting message
+- `GET /api/bot-stats` - Returns live bot statistics (totalUsers, totalGirls, totalMen, activeChats, onlineNow) read from bot SQLite DB (bot.db or bot/dating_bot.db)
 
 The pattern uses typed route definitions that can be consumed by both frontend hooks and backend handlers.
+
+### Landing Page
+- **Theme**: Pink/purple (primary: 330 80% 55%, accent: 270 60% 55%) with dark mode support
+- **Sections**: Hero, animated stats counter, features for men (6 cards), features for girls (6 cards), how it works (4 steps), service catalog (9 categories), security, CTA
+- **SEO**: Title, meta description, Open Graph tags in index.html
+- **Bot link**: Placeholder `https://t.me/your_bot_username` — needs real bot username
 
 ## External Dependencies
 
