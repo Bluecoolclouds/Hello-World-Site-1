@@ -199,9 +199,12 @@ async def search_for_user(user_id: int, message: Message):
     profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Оценить заново", callback_data="reset_ratings"))
         await message.answer(
             "Пока нет новых анкет.\n"
-            "Попробуйте позже или измените фильтры поиска."
+            "Попробуйте позже или измените фильтры поиска.",
+            reply_markup=kb.as_markup()
         )
         return
 
@@ -238,10 +241,13 @@ async def search_for_user_via_bot(user_id: int, bot):
     profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Оценить заново", callback_data="reset_ratings"))
         await bot.send_message(
             user_id,
             "Пока нет новых анкет.\n"
-            "Попробуйте позже или измените фильтры поиска."
+            "Попробуйте позже или измените фильтры поиска.",
+            reply_markup=kb.as_markup()
         )
         return
 
@@ -266,6 +272,11 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
     to_id = int(callback.data.split("_")[1])
     from_id = callback.from_user.id
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
     db.add_like(from_id, to_id)
     db.add_tracking(from_id, to_id)
 
@@ -279,7 +290,8 @@ async def handle_like(callback: CallbackQuery, state: FSMContext):
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="💬 Написать", callback_data=f"openchat_{chat_id}"))
 
-    await callback.message.answer(
+    await callback.bot.send_message(
+        from_id,
         f"💌 Чат с <b>{girl_name}</b> создан!",
         reply_markup=kb.as_markup(),
         parse_mode="HTML"
@@ -311,6 +323,10 @@ async def handle_skip(callback: CallbackQuery):
     skipped_id = int(callback.data.split("_")[1])
     from_id = callback.from_user.id
     db.add_skip(from_id, skipped_id)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.answer("⏭ Пропущено")
     await show_next_profile(callback)
 
@@ -406,9 +422,12 @@ async def show_next_profile(callback: CallbackQuery):
     profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
     
     if not profile:
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Оценить заново", callback_data="reset_ratings"))
         await callback.bot.send_message(
             user_id,
-            "Анкеты закончились! Возвращайтесь позже."
+            "Анкеты закончились! Возвращайтесь позже.",
+            reply_markup=kb.as_markup()
         )
         return
 
@@ -447,7 +466,9 @@ async def show_next_profile_for_message(message: Message, user: dict):
     profile = db.get_random_profile(user_id, user['city'], user['preferences'], min_age, max_age)
 
     if not profile:
-        await message.answer("Анкеты закончились! Возвращайтесь позже.")
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Оценить заново", callback_data="reset_ratings"))
+        await message.answer("Анкеты закончились! Возвращайтесь позже.", reply_markup=kb.as_markup())
         return
 
     db.update_search_stats(user_id, now)

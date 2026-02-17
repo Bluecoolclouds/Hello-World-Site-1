@@ -489,6 +489,10 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "reset_ratings")
 async def reset_ratings_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     db.reset_ratings(callback.from_user.id)
     await callback.message.answer("Все оценки сброшены! Анкеты можно просматривать заново.")
     await callback.answer()
@@ -816,6 +820,10 @@ async def open_filters(callback: CallbackQuery):
     if not user:
         await callback.answer("Ошибка")
         return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     kb = get_filter_keyboard(user)
     await callback.message.answer(
         "<b>Фильтры поиска:</b>\n\n"
@@ -828,6 +836,10 @@ async def open_filters(callback: CallbackQuery):
 @router.callback_query(F.data == "filter_age")
 async def filter_age(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterState.min_age)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Отмена", callback_data="back_to_main"))
     await callback.message.answer(
@@ -887,6 +899,10 @@ async def process_filter_max_age(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "filter_reset")
 async def filter_reset(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     db.update_user_filters(callback.from_user.id, None, None)
     user = db.get_user(callback.from_user.id)
     kb = get_filter_keyboard(user)
@@ -896,6 +912,10 @@ async def filter_reset(callback: CallbackQuery):
 
 @router.callback_query(F.data == "start_search")
 async def start_search_callback(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     try:
         from bot.handlers.search import search_for_user_via_bot
         await search_for_user_via_bot(callback.from_user.id, callback.bot)
@@ -911,6 +931,10 @@ async def start_search_callback(callback: CallbackQuery):
 @router.callback_query(F.data == "my_tracked")
 async def my_tracked(callback: CallbackQuery):
     user_id = callback.from_user.id
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     tracked = db.get_tracked_users(user_id)
 
     if not tracked:
@@ -947,6 +971,10 @@ async def view_tracked_profile(callback: CallbackQuery):
     if not user:
         await callback.answer("Профиль не найден")
         return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
     profile_text = format_profile(user)
     kb = InlineKeyboardBuilder()
@@ -972,6 +1000,10 @@ async def untrack_user(callback: CallbackQuery):
     tracked_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
     db.remove_tracking(user_id, tracked_id)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.answer("Убрано из отслеживаемых")
     tracked = db.get_tracked_users(user_id)
     if not tracked:
@@ -1040,6 +1072,7 @@ async def process_comment(message: Message, state: FSMContext):
 
 
 async def _show_comments_block(message: Message, user_id: int):
+    import datetime
     comments = db.get_comments(user_id, limit=10)
 
     if not comments:
@@ -1049,7 +1082,14 @@ async def _show_comments_block(message: Message, user_id: int):
         for c in comments:
             name = c.get('name') or ''
             author = name if name else "Аноним"
-            text += f"  <b>{author}:</b> {c['text']}\n\n"
+            created = c.get('created_at')
+            if created:
+                dt = datetime.datetime.fromtimestamp(created, tz=datetime.timezone(datetime.timedelta(hours=3)))
+                date_str = dt.strftime("%d.%m.%Y")
+            else:
+                date_str = ""
+            date_part = f" <i>{date_str}</i>" if date_str else ""
+            text += f"  <b>{author}</b>{date_part}: {c['text']}\n\n"
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="Оставить комментарий", callback_data=f"comment_{user_id}"))
