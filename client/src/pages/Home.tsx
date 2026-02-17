@@ -165,6 +165,55 @@ const SERVICE_CATEGORIES = [
   "Доп",
 ];
 
+function AgeVerification() {
+  const [verified, setVerified] = useState(false);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("age_verified");
+    if (stored === "true") {
+      setVerified(true);
+      setVisible(false);
+    }
+  }, []);
+
+  if (!visible || verified) return null;
+
+  const confirm = () => {
+    localStorage.setItem("age_verified", "true");
+    setVerified(true);
+    setVisible(false);
+  };
+
+  const decline = () => {
+    window.location.href = "https://ya.ru";
+  };
+
+  return (
+    <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" data-testid="modal-age-verification">
+      <Card className="max-w-md w-full">
+        <CardContent className="p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+            <Shield className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3">Подтверждение возраста</h2>
+          <p className="text-muted-foreground mb-6">
+            Данный сайт содержит материалы для лиц старше 18 лет. Подтвердите, что вам исполнилось 18 лет.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button onClick={confirm} data-testid="button-age-confirm">
+              Мне есть 18 лет
+            </Button>
+            <Button variant="outline" onClick={decline} data-testid="button-age-decline">
+              Мне нет 18 лет
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: stats } = useQuery<BotStats>({
     queryKey: ["/api/bot-stats"],
@@ -176,6 +225,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AgeVerification />
       <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md" role="banner">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
