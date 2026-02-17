@@ -56,13 +56,13 @@ def format_price_table(prices: dict, for_pre: bool = False) -> str:
     return "\n".join(lines)
 
 
-def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
+def get_prices_keyboard(prices: dict, prefix: str = "price_set_", done_callback: str = "price_done") -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
 
     def btn(key, label):
         v = prices.get(key, '')
         display = str(v) if v else '-'
-        return InlineKeyboardButton(text=f"{label}: {display}", callback_data=f"price_set_{key}")
+        return InlineKeyboardButton(text=f"{label}: {display}", callback_data=f"{prefix}{key}")
 
     kb.row(InlineKeyboardButton(text="--- У меня ---", callback_data="price_noop"))
     kb.row(btn('home_1h', '1 час'), btn('home_2h', '2 часа'), btn('home_night', 'Ночь'))
@@ -70,7 +70,7 @@ def get_prices_keyboard(prices: dict) -> InlineKeyboardBuilder:
     kb.row(btn('out_1h', '1 час'), btn('out_2h', '2 часа'), btn('out_night', 'Ночь'))
     kb.row(InlineKeyboardButton(text="--- Прочее ---", callback_data="price_noop"))
     kb.row(btn('contacts_hour', 'Контактов/час'), btn('prepay', 'Предоплата'))
-    kb.row(InlineKeyboardButton(text="Готово", callback_data="price_done"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data=done_callback))
     return kb
 
 
@@ -207,26 +207,26 @@ def format_services_list(services: list) -> str:
     return "\n".join(lines)
 
 
-def get_services_categories_keyboard(services: list) -> InlineKeyboardBuilder:
+def get_services_categories_keyboard(services: list, cat_prefix: str = "svc_cat_", done_callback: str = "back_to_main") -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     for cat_id, cat in SERVICES_CATALOG.items():
         count = len([s for s in cat['items'] if s in services])
         total = len(cat['items'])
         label = f"{cat['name']} ({count}/{total})"
-        kb.row(InlineKeyboardButton(text=label, callback_data=f"svc_cat_{cat_id}"))
-    kb.row(InlineKeyboardButton(text="Готово", callback_data="back_to_main"))
+        kb.row(InlineKeyboardButton(text=label, callback_data=f"{cat_prefix}{cat_id}"))
+    kb.row(InlineKeyboardButton(text="Готово", callback_data=done_callback))
     return kb
 
 
-def get_services_category_keyboard(cat_id: str, services: list) -> InlineKeyboardBuilder:
+def get_services_category_keyboard(cat_id: str, services: list, toggle_prefix: str = "svt:", back_callback: str = "svc_back_cats") -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     cat = SERVICES_CATALOG.get(cat_id)
     if not cat:
         return kb
     for idx, item in enumerate(cat['items']):
         check = "+" if item in services else "-"
-        kb.row(InlineKeyboardButton(text=f"{check} {item}", callback_data=f"svt:{cat_id}:{idx}"))
-    kb.row(InlineKeyboardButton(text="Назад к категориям", callback_data="svc_back_cats"))
+        kb.row(InlineKeyboardButton(text=f"{check} {item}", callback_data=f"{toggle_prefix}{cat_id}:{idx}"))
+    kb.row(InlineKeyboardButton(text="Назад к категориям", callback_data=back_callback))
     return kb
 
 

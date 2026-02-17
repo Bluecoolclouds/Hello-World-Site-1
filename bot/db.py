@@ -209,6 +209,10 @@ class Database:
                 conn.execute("ALTER TABLE users ADD COLUMN name_changed_at REAL DEFAULT 0")
                 logger.info("Добавлена колонка name_changed_at")
 
+            if 'managed_by' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN managed_by INTEGER")
+                logger.info("Добавлена колонка managed_by")
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS likes (
@@ -311,6 +315,15 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM girl_whitelist WHERE user_id = ?", (user_id,))
 
+    def get_managed_girls(self, admin_id: int) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM users WHERE managed_by = ? AND is_girl = 1 ORDER BY created_at DESC",
+                (admin_id,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     def create_girl_user(self, user_id: int, username: str, name: str, age: int, city: str, bio: str, photo_id: str = None, media_type: str = None):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -368,7 +381,7 @@ class Database:
             return dict(row) if row else None
 
     def update_user_field(self, user_id: int, field: str, value):
-        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'online_schedule', 'name', 'name_changed_at', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction'}
+        allowed = {'age', 'gender', 'city', 'bio', 'preferences', 'looking_for', 'photo_id', 'media_type', 'media_ids', 'filter_min_age', 'filter_max_age', 'services', 'prices', 'schedule', 'is_online', 'online_schedule', 'name', 'name_changed_at', 'phone', 'breast', 'height', 'weight', 'clothing_size', 'shoe_size', 'intimate_grooming', 'min_age_restriction', 'managed_by'}
         if field not in allowed:
             return
         if field == 'city':

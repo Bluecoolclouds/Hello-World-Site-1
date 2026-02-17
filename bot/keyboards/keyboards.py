@@ -16,6 +16,7 @@ def get_main_menu(user_id: int = 0) -> ReplyKeyboardMarkup:
     )
     if user_id == ADMIN_USER_ID and ADMIN_USER_ID != 0:
         builder.row(
+            KeyboardButton(text="👩 Мои анкеты"),
             KeyboardButton(text="📥 Добавить анкеты")
         )
     return builder.as_markup(resize_keyboard=True)

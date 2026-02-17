@@ -80,8 +80,10 @@ The `bot/` directory contains a fully functional Telegram dating bot built with 
 - 5 sec cooldown, 50/hour limit
 - Like/Skip with match notifications
 - Block/unblock users
-- Admin: stats, ban, unban, broadcast, add girl profiles
-- In-bot relay chat: client messages forwarded to girl anonymously, girl replies forwarded back
+- Admin: stats, ban, unban, broadcast, add girl profiles, manage multiple girl profiles
+- Admin profile management (/girls): edit name, age, city, bio, photo, services, prices, schedule, auto-online, parameters (breast/height/weight), view chats per girl
+- managed_by column links girl profiles to admin account; admin_add auto-sets managed_by
+- In-bot relay chat: client messages forwarded to admin (managed_by) with label "Анкета {name} — сообщение от клиента {client}", admin replies sent as the girl
 - bot_chats and bot_messages tables for relay messaging
 - Chat created automatically on "Написать" (like) action
 - Girls see "Чаты с клиентами" in their menu

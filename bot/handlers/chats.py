@@ -85,7 +85,11 @@ async def open_chat(callback: CallbackQuery):
     is_client = (chat['client_id'] == user_id)
     is_girl = (chat['girl_id'] == user_id)
 
-    if not is_client and not is_girl:
+    girl_user = db.get_user(chat['girl_id'])
+    managed_by = girl_user.get('managed_by') if girl_user else None
+    is_admin_viewer = (managed_by and managed_by == user_id)
+
+    if not is_client and not is_girl and not is_admin_viewer:
         await callback.answer("Нет доступа")
         return
 
@@ -107,11 +111,20 @@ async def open_chat(callback: CallbackQuery):
 
     messages = db.get_bot_chat_messages(chat_id, limit=20)
 
-    lines = [f"💬 Чат с <b>{other_name}</b>\n"]
+    girl_name = girl_user.get('name', '') if girl_user else 'Девушка'
+    if not girl_name:
+        girl_name = 'Девушка'
+
+    if is_admin_viewer:
+        lines = [f"💬 Анкета <b>{girl_name}</b> — чат с <b>{other_name}</b>\n"]
+    elif is_client:
+        lines = [f"💬 Чат с <b>{other_name}</b>\n"]
+    else:
+        lines = [f"💬 Чат с <b>{other_name}</b>\n"]
 
     if messages:
         for msg in messages:
-            if msg['sender_id'] == user_id:
+            if msg['sender_id'] == user_id or (is_admin_viewer and msg['sender_id'] == chat['girl_id']):
                 prefix = "Вы"
             else:
                 prefix = other_name
@@ -199,7 +212,11 @@ async def start_reply(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Чат не найден")
         return
 
-    if chat['client_id'] != user_id and chat['girl_id'] != user_id:
+    girl_user_reply = db.get_user(chat['girl_id'])
+    managed_by_reply = girl_user_reply.get('managed_by') if girl_user_reply else None
+    is_admin_replier = (managed_by_reply and managed_by_reply == user_id)
+
+    if chat['client_id'] != user_id and chat['girl_id'] != user_id and not is_admin_replier:
         await callback.answer("Нет доступа")
         return
 
@@ -246,12 +263,22 @@ async def handle_chat_message(message: Message, state: FSMContext, bot: Bot):
     is_client = (chat['client_id'] == sender_id)
     is_girl_sender = (chat['girl_id'] == sender_id)
 
-    if not is_client and not is_girl_sender:
+    girl_user = db.get_user(chat['girl_id'])
+    managed_by = girl_user.get('managed_by') if girl_user else None
+    is_admin_sender = (managed_by and managed_by == sender_id)
+
+    if not is_client and not is_girl_sender and not is_admin_sender:
         await state.clear()
         await message.answer("Нет доступа к этому чату.")
         return
 
-    recipient_id = chat['girl_id'] if is_client else chat['client_id']
+    if is_admin_sender:
+        is_girl_sender = True
+
+    if is_client:
+        recipient_id = managed_by if managed_by else chat['girl_id']
+    else:
+        recipient_id = chat['client_id']
 
     raw_text = message.text or message.caption or ''
     text_content = html.escape(raw_text)
@@ -265,16 +292,22 @@ async def handle_chat_message(message: Message, state: FSMContext, bot: Bot):
         media_type = 'video'
         media_id = message.video.file_id
 
-    db.add_bot_message(chat_id, sender_id, raw_text, media_type, media_id)
+    stored_sender_id = chat['girl_id'] if is_admin_sender else sender_id
+    db.add_bot_message(chat_id, stored_sender_id, raw_text, media_type, media_id)
 
     if is_client:
         sender_user = db.get_user(sender_id)
         sender_name = sender_user.get('name', '') if sender_user else ''
         if not sender_name:
             sender_name = 'Аноним'
-        label = f"💬 Сообщение от клиента <b>{sender_name}</b>:\n\n"
+        girl_name_for_label = girl_user.get('name', '') if girl_user else 'Девушка'
+        if not girl_name_for_label:
+            girl_name_for_label = 'Девушка'
+        if managed_by:
+            label = f"💬 Анкета <b>{girl_name_for_label}</b> — сообщение от клиента <b>{sender_name}</b>:\n\n"
+        else:
+            label = f"💬 Сообщение от клиента <b>{sender_name}</b>:\n\n"
     else:
-        girl_user = db.get_user(sender_id)
         girl_name = girl_user.get('name', '') if girl_user else 'Девушка'
         if not girl_name:
             girl_name = 'Девушка'
@@ -329,16 +362,33 @@ async def notify_girl_new_message(bot: Bot, chat_id: int, client_id: int, girl_i
     if not client_name:
         client_name = 'Аноним'
 
+    girl = db.get_user(girl_id)
+    managed_by = girl.get('managed_by') if girl else None
+    girl_name = girl.get('name', '') if girl else 'Девушка'
+    if not girl_name:
+        girl_name = 'Девушка'
+
+    notify_target = managed_by if managed_by else girl_id
+
     try:
         notify_kb = InlineKeyboardBuilder()
         notify_kb.row(InlineKeyboardButton(
             text="💬 Открыть чат",
             callback_data=f"openchat_{chat_id}"
         ))
+        if managed_by:
+            text = (
+                f"💬 Анкета <b>{girl_name}</b> — новое сообщение от клиента <b>{client_name}</b>!\n\n"
+                "Нажмите чтобы ответить."
+            )
+        else:
+            text = (
+                f"💬 Новое сообщение от клиента <b>{client_name}</b>!\n\n"
+                "Нажмите чтобы ответить."
+            )
         await bot.send_message(
-            girl_id,
-            f"💬 Новое сообщение от клиента <b>{client_name}</b>!\n\n"
-            "Нажмите чтобы ответить.",
+            notify_target,
+            text,
             reply_markup=notify_kb.as_markup(),
             parse_mode="HTML"
         )
